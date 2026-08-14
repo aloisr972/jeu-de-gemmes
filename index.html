@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orapa Mine — prototype</title>
+<style>
+  :root{
+    --bg:#12151c; --panel:#1b2028; --frame:#2f3c56; --field:#8d9299;
+    --grid:#f2e6b8; --ink:#e9ecf1; --dim:#98a0ad; --accent:#f5a623;
+    --line:#2a3140;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  h1{font-size:17px; margin:0; letter-spacing:.12em; text-transform:uppercase}
+  h1 span{color:var(--accent)}
+  h2{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+     margin:0 0 10px}
+  header{display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 16px; border-bottom:1px solid var(--line); background:#0e1117}
+  header .sub{color:var(--dim); font-size:12.5px}
+  main{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+       gap:16px; padding:16px; align-items:start}
+  @media(max-width:1000px){ main{grid-template-columns:minmax(0,1fr)} }
+  #aidePanel{grid-column:1/-1; position:sticky; top:0; z-index:5;
+    background:#171b22; border:1px solid var(--line); border-radius:12px; padding:10px 14px}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px}
+  svg{display:block; width:100%; height:auto; touch-action:manipulation}
+
+  .row{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px}
+  button{font:inherit; font-size:13px; color:var(--ink); background:#262d38;
+    border:1px solid #39414f; border-radius:8px; padding:7px 11px; cursor:pointer}
+  button:hover{background:#2f3743}
+  button.on{background:var(--accent); border-color:var(--accent); color:#1b1200; font-weight:600}
+  button:disabled{opacity:.4; cursor:default}
+  .sep{width:1px; align-self:stretch; background:var(--line); margin:0 4px}
+  label.chk{display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--dim);
+    cursor:pointer; user-select:none}
+
+  #tray{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+  .gem{width:74px; height:60px; background:#151a22; border:1px solid #39414f;
+    border-radius:8px; padding:3px; cursor:pointer; position:relative}
+  .gem.sel{border-color:var(--accent); box-shadow:0 0 0 2px rgba(245,166,35,.25)}
+  .gem.used{opacity:.28; pointer-events:none}
+  .gem svg{width:100%; height:100%}
+  .gem b{position:absolute; left:4px; bottom:1px; font-size:9px; color:var(--dim); font-weight:400}
+
+  #status{margin-top:10px; font-size:12.5px; min-height:18px}
+  #status .ok{color:#6fcf97}
+  #status .bad{color:#f2827f}
+  #status ul{margin:4px 0 0; padding-left:18px}
+
+  .swatches{display:flex; gap:5px; flex-wrap:wrap}
+  .sw{width:30px; height:30px; border-radius:7px; border:2px solid #39414f; cursor:pointer;
+    /* liseré clair : sans lui la pastille « corps noir » disparait sur le fond sombre */
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+  .sw.sel{border-color:var(--accent);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.28), 0 0 0 2px rgba(245,166,35,.25)}
+  .brush{width:34px; height:34px; padding:2px; box-shadow:none}
+  .brush.sel{box-shadow:0 0 0 2px rgba(245,166,35,.25)}
+
+  /* ---- aide de jeu : couleurs en sortie ---- */
+  .aideHead{display:flex; align-items:center; gap:10px}
+  .aideHead h2{margin:0}
+  #combos{display:flex; flex-wrap:wrap; gap:5px 10px; margin-top:9px}
+  .cb{display:flex; align-items:center; gap:3px; font-size:11.5px; color:var(--dim);
+    background:#1f242d; border:1px solid #2c333f; border-radius:7px; padding:3px 7px 3px 4px}
+  .cb i{width:12px; height:12px; border-radius:3px; border:1px solid #00000055; display:block}
+  .cb .eq{color:#5d6570; margin:0 2px}
+  .cb .res{width:17px; height:17px; border-radius:4px; border:1px solid #00000066}
+  .cb b{color:var(--ink); font-weight:500; white-space:nowrap}
+
+  /* ---- notes de partie ---- */
+  #noteForm{display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:12px}
+  #noteForm input, #noteForm select{font:inherit; font-size:13px; color:var(--ink);
+    background:#141920; border:1px solid #39414f; border-radius:7px; padding:6px 7px}
+  #noteForm input{width:52px; text-align:center; text-transform:uppercase}
+  #noteForm input.bad{border-color:#f2827f}
+  #noteForm .to{color:var(--dim)}
+  #log,#mylog{margin-top:10px; max-height:300px; overflow:auto;
+    border-top:1px solid var(--line); padding-top:8px}
+  #log:empty::after{content:"Aucune reponse notee.";
+    color:var(--dim); font-size:12.5px}
+  #mylog:empty::after{content:"Cliquez un repere du bord pour calculer une reponse.";
+    color:var(--dim); font-size:12.5px}
+  .shot{display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:6px;
+    font-size:13.5px}
+  .shot:hover{background:#232a35}
+  .shot .dot{width:13px; height:13px; border-radius:50%; border:1px solid #555; flex:none}
+  .shot .arr{color:var(--dim)}
+  .shot .col{color:var(--dim); font-size:12.5px}
+  .shot .src{color:#5d6570; font-size:11px; margin-left:auto; white-space:nowrap}
+  .shot .kill{color:#5d6570; cursor:pointer; padding:0 3px; font-size:15px; line-height:1}
+  .shot .kill:hover{color:#f2827f}
+  .shot.clickable{cursor:pointer}
+  .hint{color:var(--dim); font-size:12.5px; margin-top:8px}
+  details{margin-top:10px; font-size:13px; color:var(--dim)}
+  summary{cursor:pointer; color:var(--ink); font-size:12.5px}
+  details p{margin:6px 0}
+  kbd{background:#262d38; border:1px solid #39414f; border-radius:4px; padding:0 4px; font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Orapa <span>Mine</span></h1>
+  <div class="sub">prototype jouable — bac a sable / editeur</div>
+</header>
+
+<main>
+  <!-- ============================================ AIDE DE JEU (couleurs) == -->
+  <section id="aidePanel">
+    <div class="aideHead">
+      <h2>Couleurs du rayon en sortie</h2>
+      <button id="btnAide" style="margin-left:auto">Masquer</button>
+    </div>
+    <div id="combos"></div>
+  </section>
+
+  <!-- ================================================= PLATEAU MINE ===== -->
+  <section class="panel">
+    <h2>Mes gemmes</h2>
+    <div class="hint" style="margin-top:0">Votre mine, celle que l'adversaire doit
+      deviner. Cliquez un repere du bord pour calculer la reponse a lui donner.</div>
+    <div id="mine"></div>
+
+    <div id="tray"></div>
+
+    <div class="row">
+      <button id="btnRot">Pivoter</button>
+      <button id="btnDel">Retirer</button>
+      <span class="sep"></span>
+      <button id="btnRand">Placement aleatoire</button>
+      <button id="btnClear">Vider</button>
+      <span class="sep"></span>
+      <button id="btnQuery">Interroger une case</button>
+      <span class="sep"></span>
+      <label class="chk"><input type="checkbox" id="chkHide"> Masquer mes gemmes</label>
+      <label class="chk"><input type="checkbox" id="chkExt"> Extensions</label>
+    </div>
+
+    <div id="status"></div>
+
+    <h2 style="margin-top:16px">Reponses que je dois donner</h2>
+    <div id="mylog"></div>
+
+    <details>
+      <summary>Comment placer</summary>
+      <p>Cliquez une gemme dans le bac, puis cliquez sur le plateau pour la poser.
+         Faites glisser une gemme posee pour la deplacer. <kbd>R</kbd> pivote,
+         <kbd>Suppr</kbd> retire.</p>
+      <p>Les gemmes forment un tangram de 4x4 cases. Le grand triangle et le petit
+         triangle ne se posent que l'hypotenuse alignee sur la grille ; le carre
+         se pose toujours en losange. C'est la regle b du livret.</p>
+    </details>
+  </section>
+
+  <!-- ============================================ FEUILLE DE SOLUTIONS ==== -->
+  <section class="panel">
+    <h2>Feuille de solutions</h2>
+    <div class="hint" style="margin-top:0">La mine de l'adversaire, telle que vous
+      la deduisez. Grille de travail : rien n'y est calcule.</div>
+    <div id="sheet"></div>
+
+    <div class="row">
+      <span style="font-size:12.5px;color:var(--dim);width:100%">Couleur</span>
+      <div class="swatches" id="swColors"></div>
+    </div>
+    <div class="row">
+      <span style="font-size:12.5px;color:var(--dim);width:100%">Forme</span>
+      <div class="swatches" id="swBrushes"></div>
+    </div>
+    <div class="row">
+      <button id="btnWipe">Effacer la feuille</button>
+    </div>
+  </section>
+
+  <!-- ================================================ REPONSES NOTEES ==== -->
+  <section class="panel" style="grid-column:1/-1">
+    <h2>Reponses de l'adversaire</h2>
+    <div class="hint" style="margin-top:0">Recopiez ici ce que l'adversaire vous
+      annonce dans le chat. Rien n'est verifie ni calcule : la ligne est ajoutee
+      telle quelle. Laissez la sortie vide pour noter la reponse a une question
+      « Qu'y a-t-il en E4 ? ».</div>
+    <form id="noteForm" autocomplete="off">
+      <input id="nIn"  placeholder="1"  maxlength="3" aria-label="point d'entree">
+      <span class="to">&rarr;</span>
+      <input id="nOut" placeholder="11" maxlength="3" aria-label="point de sortie">
+      <select id="nCol"></select>
+      <button type="submit">Ajouter</button>
+      <span class="sep"></span>
+      <button type="button" id="btnAbs">Signal absorbe</button>
+      <button type="button" id="btnClearLog">Tout effacer</button>
+    </form>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script src="engine.js"></script>
+<script>
+(function(){
+'use strict';
+var O = Orapa, COLS = O.COLS, ROWS = O.ROWS;
+var SVGNS = 'http://www.w3.org/2000/svg';
+
+/* ------------------------------------------------------------------ etat */
+var state = {
+  placements: [],                    // { pieceId, rot, x, y }
+  selTray: null,                     // id de gemme choisie dans le bac
+  selPlaced: -1,                     // index dans placements
+  hide: false,
+  ext: false,
+  // Deux journaux strictement independants :
+  shots: [],       // rayons calcules sur MES gemmes = ce que je reponds a l'adversaire
+  notes: [],       // ce que l'adversaire me repond = saisie manuelle, jamais calculee
+  activeShot: null,
+  query: false,                      // mode « interroger une case » sur mes gemmes
+  brushColor: 'R',
+  brushShape: 'full',                // full|NE|NO|SE|SO|X|O|gomme|query
+  sheet: {},                         // 'x,y' -> { half, color }
+  marks: {}                          // 'x,y' -> 'X' | 'O'
+};
+var occ = {};
+
+function el(tag, attrs, parent){
+  var n = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function key(x,y){ return x+','+y; }
+
+/* --------------------------------------------------- dessin d'un polygone */
+function polyPoints(p){ return p.map(function(v){return v[0]+','+v[1];}).join(' '); }
+
+// Lignes de surface de la gemme : uniquement celles qui prolongent le
+// quadrillage du plateau (pas de diagonale), comme sur les pieces reelles.
+function surfaceLines(g, poly, id){
+  var bb = O.polyBox(poly);
+  var cp = el('clipPath', { id: id }, g);
+  el('polygon', { points: polyPoints(poly) }, cp);
+  var lg = el('g', { 'clip-path': 'url(#'+id+')', 'stroke-width': 0.035,
+                     'stroke-linecap':'round', opacity:.55 }, g);
+  var x0 = bb.x0, y0 = bb.y0, x1 = bb.x0+bb.w, y1 = bb.y0+bb.h, d;
+  for (d = Math.ceil(x0); d <= x1; d++) el('line', { x1:d, y1:y0, x2:d, y2:y1 }, lg);
+  for (d = Math.ceil(y0); d <= y1; d++) el('line', { x1:x0, y1:d, x2:x1, y2:d }, lg);
+  return lg;
+}
+
+function drawGem(g, poly, colorKey, opts){
+  opts = opts || {};
+  var c = O.GEM_COLORS[colorKey];
+  var uid = 'clip'+(drawGem.n = (drawGem.n||0)+1);
+  var wrap = el('g', {}, g);
+  el('polygon', { points: polyPoints(poly), fill: c.fill,
+    'fill-opacity': colorKey==='D' ? .55 : 1,
+    stroke: c.edge, 'stroke-width': .05, 'stroke-linejoin':'round',
+    opacity: opts.ghost ? .45 : 1 }, wrap);
+  var lg = surfaceLines(wrap, poly, uid);
+  lg.setAttribute('stroke', c.edge);
+  if (opts.selected)
+    el('polygon', { points: polyPoints(poly), fill:'none', stroke:'#f5a623',
+      'stroke-width': .09, 'stroke-linejoin':'round' }, wrap);
+  return wrap;
+}
+
+/* ============================================================ PLATEAU SVG */
+function buildBoard(host, kind){
+  host.innerHTML = '';
+  var M = 1.15;
+  var svg = el('svg', { viewBox: (-M)+' '+(-M)+' '+(COLS+2*M)+' '+(ROWS+2*M),
+                        'font-family':'inherit' });
+  host.appendChild(svg);
+
+  // cadre
+  el('rect', { x:-M, y:-M, width:COLS+2*M, height:ROWS+2*M, rx:.45,
+    fill: kind==='mine' ? '#2f3c56' : '#22262e' }, svg);
+  el('rect', { x:0, y:0, width:COLS, height:ROWS,
+    fill: kind==='mine' ? '#8d9299' : '#f7f4ea' }, svg);
+
+  // grille
+  var gg = el('g', { stroke: kind==='mine' ? '#f2e6b8' : '#c9c3b2',
+                     'stroke-width':.028, opacity:.9 }, svg);
+  for (var i=0;i<=COLS;i++) el('line',{x1:i,y1:0,x2:i,y2:ROWS},gg);
+  for (var j=0;j<=ROWS;j++) el('line',{x1:0,y1:j,x2:COLS,y2:j},gg);
+
+  // couches
+  var layers = {
+    gems:  el('g',{},svg),
+    marks: el('g',{},svg),
+    ray:   el('g',{},svg),
+    hit:   el('g',{},svg),
+    edge:  el('g',{},svg)
+  };
+
+  // Reperages de bord. Cliquables uniquement sur MES gemmes (pour calculer la
+  // reponse a donner). Sur la feuille de solutions ce sont de simples reperes.
+  var clickable = (kind === 'mine');
+  var lab = el('g',{ 'font-size':.52, 'font-weight':'700',
+                     'text-anchor':'middle', 'dominant-baseline':'central' }, layers.edge);
+  function mk(label, x, y){
+    var grp = el('g',{ style: clickable ? 'cursor:pointer' : 'cursor:default' }, lab);
+    el('rect',{ x:x-.42, y:y-.38, width:.84, height:.76, rx:.18,
+      fill:'transparent', 'data-lab':label }, grp);
+    var t = el('text',{ x:x, y:y, 'data-lab':label,
+      fill: kind==='mine' ? '#f2e6b8' : '#5b5f68' }, grp);
+    t.textContent = label;
+    grp.addEventListener('pointerdown', function(ev){ ev.stopPropagation(); });
+    grp.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if (clickable) fire(label);
+    });
+    (kind === 'mine' ? mineLabels : sheetLabels)[label] = t;
+    return grp;
+  }
+  for (var c=1;c<=COLS;c++)  mk(String(c),         c-.5,  -.62);
+  for (var r=0;r<ROWS;r++)   mk(String(11+r),      COLS+.62, r+.5);
+  for (var c2=0;c2<COLS;c2++)mk(O.LETTERS_COL[c2], c2+.5, ROWS+.62);
+  for (var r2=0;r2<ROWS;r2++)mk(O.LETTERS_ROW[r2], -.62, r2+.5);
+
+  return { svg: svg, layers: layers };
+}
+
+var mineLabels = {}, sheetLabels = {};
+var mine, sheet;
+
+/* ================================================== rendu plateau mine === */
+function renderMine(){
+  var L = mine.layers;
+  L.gems.innerHTML = ''; L.ray.innerHTML = ''; L.hit.innerHTML = '';
+
+  if (!state.hide){
+    state.placements.forEach(function(pl, i){
+      var g = drawGem(L.gems, O.placedPoly(pl), O.pieceById(pl.pieceId).color,
+                      { selected: state.selPlaced === i });
+      g.style.cursor = 'move';
+      g.addEventListener('pointerdown', function(ev){ startDrag(ev, i); });
+    });
+  } else {
+    el('text', { x: COLS/2, y: ROWS/2, 'text-anchor':'middle',
+      'dominant-baseline':'central', 'font-size':.7, fill:'#6f747c',
+      'letter-spacing':.08 }, L.gems).textContent = 'PARAVENT';
+  }
+
+  // rayon actif — le trace n'est visible que paravent leve
+  var s = state.activeShot;
+  if (s && s.path){
+    var a = s.path[0], b = s.path[s.path.length-1];
+    if (!state.hide){
+      var pts = s.path.map(function(p){return p[0]+','+p[1];}).join(' ');
+      el('polyline',{ points:pts, fill:'none', stroke:'#000', 'stroke-opacity':.35,
+        'stroke-width':.16, 'stroke-linejoin':'round','stroke-linecap':'round' }, L.ray);
+      el('polyline',{ points:pts, fill:'none',
+        stroke: s.absorbed ? '#15181f' : s.hex, 'stroke-width':.11,
+        'stroke-dasharray':'.26 .18', 'stroke-linejoin':'round',
+        'stroke-linecap':'round' }, L.ray);
+    }
+    el('circle',{ cx:a[0], cy:a[1], r:.16, fill:'#fff', stroke:'#000',
+      'stroke-width':.04 }, L.ray);
+    if (!s.absorbed)
+      el('circle',{ cx:b[0], cy:b[1], r:.16, fill:s.hex, stroke:'#000',
+        'stroke-width':.04 }, L.ray);
+  }
+
+  // fantome de pose
+  if (state.selTray && ghost){
+    var p = O.rotatePoly(O.pieceById(state.selTray).poly, ghost.rot)
+             .map(function(v){ return [v[0]+ghost.x, v[1]+ghost.y]; });
+    drawGem(L.hit, p, O.pieceById(state.selTray).color, { ghost:true });
+  }
+}
+
+/* ============================================== rendu feuille solutions == */
+function renderSheet(){
+  var L = sheet.layers;
+  L.gems.innerHTML = ''; L.marks.innerHTML = '';
+  Object.keys(state.sheet).forEach(function(k){
+    var p = k.split(',').map(Number), v = state.sheet[k];
+    var poly = halfPoly(p[0], p[1], v.half);
+    var c = O.GEM_COLORS[v.color];
+    var pale = (v.color === 'W' || v.color === 'D');
+    el('polygon',{ points: polyPoints(poly), fill:c.fill,
+      'fill-opacity': v.color==='D' ? .5 : (v.color==='W' ? .95 : .85),
+      stroke: pale ? '#6d6a60' : c.edge,
+      'stroke-width': pale ? .06 : .035, 'stroke-linejoin':'round' }, L.gems);
+  });
+  Object.keys(state.marks).forEach(function(k){
+    var p = k.split(',').map(Number), m = state.marks[k];
+    var g = el('g',{ transform:'translate('+(p[0]+.5)+','+(p[1]+.5)+')' }, L.marks);
+    if (m === 'X'){
+      el('path',{ d:'M-.2,-.2 L.2,.2 M.2,-.2 L-.2,.2', stroke:'#1d2029',
+        'stroke-width':.09, 'stroke-linecap':'round', fill:'none' }, g);
+    } else {
+      el('circle',{ r:.2, fill:'none', stroke:'#1d2029', 'stroke-width':.09 }, g);
+    }
+  });
+  // Les reperages de la feuille sont teintes par MES NOTES uniquement,
+  // jamais par ce qui est calcule sur mes propres gemmes.
+  Object.keys(sheetLabels).forEach(function(l){
+    sheetLabels[l].setAttribute('fill', '#5b5f68');
+  });
+  state.notes.forEach(function(n){
+    [n.entry, n.exit].forEach(function(l){
+      var t = l && sheetLabels[l];
+      if (t) t.setAttribute('fill', n.absorbed ? '#15181f' : shade(n.hex));
+    });
+  });
+}
+function shade(hex){ return hex === '#ffffff' ? '#9a9a9a' : hex; }
+
+function halfPoly(x,y,h){
+  var NO=[x,y], NE=[x+1,y], SE=[x+1,y+1], SO=[x,y+1];
+  switch(h){
+    case 'full': return [NO,NE,SE,SO];
+    case 'NE':   return [NO,NE,SE];
+    case 'NO':   return [NO,NE,SO];
+    case 'SE':   return [NE,SE,SO];
+    case 'SO':   return [NO,SO,SE];
+  }
+}
+
+/* ============================================================== tir rayon */
+// Rayon calcule sur MES gemmes : la reponse que je dois donner a l'adversaire.
+function fire(label){
+  var r = O.trace(occ, label);
+  if (!r) return;
+  state.shots.unshift(r);
+  state.activeShot = r;
+  renderMine();
+  renderMyLog();
+}
+
+// Fabrique une ligne de journal. `list` sert au bouton de suppression.
+function logLine(s, list, redraw){
+  var d = document.createElement('div');
+  d.className = 'shot';
+  if (s.kind === 'sonde'){
+    d.innerHTML = '<span class="dot" style="background:transparent;border-color:#666"></span>'
+      + '<b>' + s.cell + '</b><span class="arr">?</span><span class="col">' + s.texte + '</span>';
+  } else if (s.absorbed){
+    d.innerHTML = '<span class="dot" style="background:#3b3b3b"></span><b>'+(s.entry||'—')+'</b>'
+      + '<span class="arr">&rarr;</span><span class="col">signal absorbe</span>';
+  } else {
+    d.innerHTML = '<span class="dot" style="background:'+s.hex+'"></span><b>'+(s.entry||'—')+'</b>'
+      + (s.exit ? '<span class="arr">&rarr;</span><b>'+s.exit+'</b>' : '')
+      + '<span class="col">'+s.couleur+'</span>';
+  }
+  var kill = document.createElement('span');
+  kill.className = 'kill'; kill.textContent = '×'; kill.title = 'supprimer';
+  kill.onclick = function(ev){
+    ev.stopPropagation();
+    list.splice(list.indexOf(s), 1);
+    if (state.activeShot === s) state.activeShot = null;
+    redraw();
+  };
+  d.appendChild(kill);
+  if (s.path){
+    d.classList.add('clickable');
+    d.onclick = function(){ state.activeShot = s; renderMine(); renderMyLog(); };
+  }
+  if (s === state.activeShot) d.style.background = '#2a3240';
+  return d;
+}
+
+// Journal de gauche : ce que je dois repondre a l'adversaire (calcule).
+function renderMyLog(){
+  var box = document.getElementById('mylog');
+  box.innerHTML = '';
+  state.shots.forEach(function(s){
+    box.appendChild(logLine(s, state.shots, function(){ renderMine(); renderMyLog(); }));
+  });
+}
+
+// Journal du bas : ce que l'adversaire me repond (saisi a la main).
+function renderNotes(){
+  var box = document.getElementById('log');
+  box.innerHTML = '';
+  state.notes.forEach(function(n){
+    box.appendChild(logLine(n, state.notes, function(){ renderSheet(); renderNotes(); }));
+  });
+}
+
+/* -------------------------------------------- saisie manuelle d'une reponse
+   Aucune validation, aucun rapport avec le plateau « Mes gemmes ».
+   Un clic sur Ajouter ajoute la ligne, telle qu'elle a ete tapee.            */
+function addNote(absorbed){
+  var iIn = document.getElementById('nIn'), iOut = document.getElementById('nOut');
+  var a = iIn.value.trim().toUpperCase();
+  var b = iOut.value.trim().toUpperCase();
+  var couleur = document.getElementById('nCol').value;
+  state.notes.unshift(absorbed
+    ? { entry:a, exit:null, absorbed:true }
+    : { entry:a, exit:b, absorbed:false, couleur:couleur, hex:O.RAY_HEX[couleur] });
+  iIn.value = ''; iOut.value = ''; iIn.focus();
+  renderSheet(); renderNotes();
+}
+
+/* --------------------------------------------------- aide de jeu : couleurs */
+function renderCombos(){
+  var box = document.getElementById('combos');
+  box.innerHTML = '';
+  O.COMBOS.forEach(function(c){
+    var d = document.createElement('div');
+    d.className = 'cb';
+    c.in.forEach(function(k, i){
+      if (i) { var p = document.createElement('span'); p.className='eq'; p.textContent='+'; d.appendChild(p); }
+      var sq = document.createElement('i');
+      sq.style.background = O.GEM_COLORS[k].fill;
+      sq.title = O.GEM_COLORS[k].nom;
+      d.appendChild(sq);
+    });
+    var eq = document.createElement('span'); eq.className='eq'; eq.textContent='='; d.appendChild(eq);
+    var res = document.createElement('i'); res.className='res';
+    res.style.background = O.RAY_HEX[c.out]; d.appendChild(res);
+    var lab = document.createElement('b'); lab.textContent = c.out; d.appendChild(lab);
+    box.appendChild(d);
+  });
+  // le corps noir
+  var d2 = document.createElement('div');
+  d2.className = 'cb';
+  d2.innerHTML = '<i style="background:'+O.GEM_COLORS.K.fill+'"></i>'
+    + '<span class="eq">=</span><b>signal absorbe</b>';
+  box.appendChild(d2);
+  var d3 = document.createElement('div');
+  d3.className = 'cb';
+  d3.innerHTML = '<i style="background:'+O.GEM_COLORS.D.fill+'"></i>'
+    + '<span class="eq">=</span><b>sans effet</b>';
+  box.appendChild(d3);
+}
+
+function fillColorSelect(){
+  var sel = document.getElementById('nCol');
+  var seen = {};
+  O.COMBOS.forEach(function(c){ seen[c.out] = 1; });
+  seen['transparent'] = 1;
+  Object.keys(seen).forEach(function(n){
+    var o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
+  sel.value = 'bleu';
+}
+
+/* ============================================================ bac a gemmes */
+function renderTray(){
+  var tray = document.getElementById('tray');
+  tray.innerHTML = '';
+  O.PIECES.forEach(function(p){
+    if (!p.base && !state.ext) return;
+    var used = state.placements.some(function(pl){ return pl.pieceId === p.id; });
+    var d = document.createElement('div');
+    d.className = 'gem' + (state.selTray === p.id ? ' sel' : '') + (used ? ' used' : '');
+    var svg = el('svg',{ viewBox:'-.3 -.3 4.6 2.6' });
+    d.appendChild(svg);
+    drawGem(svg, p.poly, p.color, {});
+    var b = document.createElement('b'); b.textContent = p.nom.replace('Parallelogramme','Parall.');
+    d.appendChild(b);
+    d.onclick = function(){
+      state.selTray = state.selTray === p.id ? null : p.id;
+      state.selPlaced = -1;
+      ghost = ghost || { x:0, y:0, rot:0 };
+      ghost.rot = 0;
+      renderTray(); renderMine();
+    };
+    tray.appendChild(d);
+  });
+}
+
+/* ======================================================== pose / deplacement */
+var ghost = { x:3, y:3, rot:0 };
+
+function svgPoint(svg, ev){
+  var pt = svg.createSVGPoint();
+  pt.x = ev.clientX; pt.y = ev.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function clampPlace(poly, x, y){
+  var bb = O.polyBox(poly);
+  return { x: Math.max(0, Math.min(COLS - bb.w, x)),
+           y: Math.max(0, Math.min(ROWS - bb.h, y)) };
+}
+
+function onMineMove(ev){
+  if (!state.selTray) return;
+  var p = svgPoint(mine.svg, ev);
+  var poly = O.rotatePoly(O.pieceById(state.selTray).poly, ghost.rot);
+  var bb = O.polyBox(poly);
+  var c = clampPlace(poly, Math.round(p.x - bb.w/2), Math.round(p.y - bb.h/2));
+  if (c.x !== ghost.x || c.y !== ghost.y){ ghost.x = c.x; ghost.y = c.y; renderMine(); }
+}
+function onMineClick(ev){
+  if (ev.target.getAttribute && ev.target.getAttribute('data-lab')) return;
+  if (suppressClick){ suppressClick = false; return; }
+  if (state.query){                       // « Qu'y a-t-il en E4 ? » sur mes gemmes
+    var p = svgPoint(mine.svg, ev);
+    var cx = Math.floor(p.x), cy = Math.floor(p.y);
+    if (cx<0||cx>=COLS||cy<0||cy>=ROWS) return;
+    var a = O.sonde(occ, cx, cy);
+    state.shots.unshift({ kind:'sonde', cell:O.cellName(cx+','+cy), texte:a.texte });
+    renderMyLog();
+    return;
+  }
+  if (state.selTray){
+    onMineMove(ev);
+    state.placements.push({ pieceId: state.selTray, rot: ghost.rot, x: ghost.x, y: ghost.y });
+    state.selPlaced = state.placements.length - 1;
+    state.selTray = null;
+    renderTray(); renderAll();
+  } else {
+    state.selPlaced = -1; renderMine();
+  }
+}
+
+var drag = null, suppressClick = false;
+function startDrag(ev, i){
+  if (state.selTray) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  state.selPlaced = i;
+  var p = svgPoint(mine.svg, ev);
+  drag = { i:i, ox: p.x - state.placements[i].x, oy: p.y - state.placements[i].y, moved:false };
+  renderMine();
+  window.addEventListener('pointermove', onDrag);
+  window.addEventListener('pointerup', endDrag);
+}
+function onDrag(ev){
+  if (!drag) return;
+  var p = svgPoint(mine.svg, ev);
+  var pl = state.placements[drag.i];
+  var poly = O.rotatePoly(O.pieceById(pl.pieceId).poly, pl.rot);
+  var c = clampPlace(poly, Math.round(p.x - drag.ox), Math.round(p.y - drag.oy));
+  if (c.x !== pl.x || c.y !== pl.y){ pl.x = c.x; pl.y = c.y; drag.moved = true; renderAll(); }
+}
+function endDrag(){
+  if (drag && drag.moved) suppressClick = true;
+  drag = null;
+  window.removeEventListener('pointermove', onDrag);
+  window.removeEventListener('pointerup', endDrag);
+  renderAll();
+}
+
+function rotateSel(){
+  if (state.selTray){ ghost.rot = (ghost.rot+1)%4; renderMine(); return; }
+  var i = state.selPlaced; if (i < 0) return;
+  var pl = state.placements[i];
+  var before = O.polyBox(O.rotatePoly(O.pieceById(pl.pieceId).poly, pl.rot));
+  pl.rot = (pl.rot+1)%4;
+  var after = O.polyBox(O.rotatePoly(O.pieceById(pl.pieceId).poly, pl.rot));
+  var cx = pl.x + before.w/2, cy = pl.y + before.h/2;
+  var c = clampPlace(O.rotatePoly(O.pieceById(pl.pieceId).poly, pl.rot),
+                     Math.round(cx - after.w/2), Math.round(cy - after.h/2));
+  pl.x = c.x; pl.y = c.y;
+  renderAll();
+}
+function deleteSel(){
+  if (state.selTray){ state.selTray = null; renderTray(); renderMine(); return; }
+  if (state.selPlaced < 0) return;
+  state.placements.splice(state.selPlaced, 1);
+  state.selPlaced = -1;
+  renderTray(); renderAll();
+}
+
+/* ========================================================== feuille : outils */
+var BRUSHES = [
+  { id:'full', t:'case pleine' }, { id:'NO', t:'moitie NO' }, { id:'NE', t:'moitie NE' },
+  { id:'SO', t:'moitie SO' }, { id:'SE', t:'moitie SE' },
+  { id:'X', t:'marque X' }, { id:'O', t:'marque O' },
+  { id:'gomme', t:'gomme' }
+];
+
+function renderPalette(){
+  var cs = document.getElementById('swColors'); cs.innerHTML = '';
+  ['R','Y','B','W','D','K'].forEach(function(k){
+    var b = document.createElement('div');
+    b.className = 'sw' + (state.brushColor===k?' sel':'');
+    b.style.background = O.GEM_COLORS[k].fill;
+    b.title = O.GEM_COLORS[k].nom;
+    b.onclick = function(){ state.brushColor = k; renderPalette(); };
+    cs.appendChild(b);
+  });
+  var bs = document.getElementById('swBrushes'); bs.innerHTML = '';
+  BRUSHES.forEach(function(br){
+    var b = document.createElement('div');
+    b.className = 'sw brush' + (state.brushShape===br.id?' sel':'');
+    b.title = br.t;
+    b.style.background = '#f7f4ea';
+    // marge dans le viewBox pour que le contour ne soit pas rogne
+    var svg = el('svg',{ viewBox:'-.06 -.06 1.12 1.12', width:'100%', height:'100%' });
+    if (['full','NO','NE','SO','SE'].indexOf(br.id)>=0){
+      // Contour systematique : sans lui, le blanc sur la feuille creme est invisible.
+      var gc = O.GEM_COLORS[state.brushColor];
+      var pale = (state.brushColor === 'W' || state.brushColor === 'D');
+      el('polygon',{ points: polyPoints(halfPoly(0,0,br.id)),
+        fill: gc.fill, 'fill-opacity': state.brushColor==='D' ? .55 : 1,
+        stroke: pale ? '#6d6a60' : gc.edge, 'stroke-width':.09,
+        'stroke-linejoin':'round' }, svg);
+    } else if (br.id==='X'){
+      el('path',{d:'M.25,.25 L.75,.75 M.75,.25 L.25,.75',stroke:'#1d2029',
+        'stroke-width':.12,fill:'none','stroke-linecap':'round'},svg);
+    } else if (br.id==='O'){
+      el('circle',{cx:.5,cy:.5,r:.26,fill:'none',stroke:'#1d2029','stroke-width':.12},svg);
+    } else if (br.id==='gomme'){
+      el('path',{d:'M.2,.72 L.55,.25 L.8,.45 L.45,.85 Z',fill:'#e88',stroke:'#a44',
+        'stroke-width':.05},svg);
+    }
+    b.appendChild(svg);
+    b.onclick = function(){ state.brushShape = br.id; renderPalette(); };
+    bs.appendChild(b);
+  });
+}
+
+function paintAt(ev){
+  var p = svgPoint(sheet.svg, ev);
+  var x = Math.floor(p.x), y = Math.floor(p.y);
+  if (x<0||x>=COLS||y<0||y>=ROWS) return;
+  var k = key(x,y), s = state.brushShape;
+  if (s === 'gomme'){ delete state.sheet[k]; delete state.marks[k]; }
+  else if (s === 'X' || s === 'O'){
+    state.marks[k] = state.marks[k] === s ? undefined : s;
+    if (!state.marks[k]) delete state.marks[k];
+  } else {
+    var cur = state.sheet[k];
+    if (cur && cur.half === s && cur.color === state.brushColor) delete state.sheet[k];
+    else state.sheet[k] = { half: s, color: state.brushColor };
+  }
+  renderSheet();
+}
+
+/* ============================================================== validation */
+function renderStatus(){
+  var box = document.getElementById('status');
+  if (!state.placements.length){ box.innerHTML = '<span style="color:var(--dim)">Plateau vide.</span>'; return; }
+  var pb = O.checkRules(state.placements);
+  if (!pb.length){
+    box.innerHTML = '<span class="ok">&#10003; Placement valide ('
+      + state.placements.length + ' gemme' + (state.placements.length>1?'s':'') + ').</span>';
+  } else {
+    box.innerHTML = '<span class="bad">&#9888; ' + pb.length + ' probleme'
+      + (pb.length>1?'s':'') + '</span><ul>'
+      + pb.map(function(p){ return '<li><b>regle '+p.rule+'</b> &middot; '+p.msg+'</li>'; }).join('')
+      + '</ul>';
+  }
+}
+
+/* ==================================================================== init */
+function renderAll(){
+  occ = O.rasterize(state.placements);
+  renderMine(); renderSheet(); renderStatus();
+}
+
+mine  = buildBoard(document.getElementById('mine'), 'mine');
+sheet = buildBoard(document.getElementById('sheet'), 'sheet');
+
+mine.svg.addEventListener('pointermove', onMineMove);
+mine.svg.addEventListener('click', onMineClick);
+
+var painting = false;
+sheet.svg.addEventListener('pointerdown', function(ev){
+  if (ev.target.getAttribute && ev.target.getAttribute('data-lab')) return;
+  painting = true; paintAt(ev);
+});
+sheet.svg.addEventListener('pointermove', function(ev){
+  if (painting) paintAt(ev);
+});
+window.addEventListener('pointerup', function(){ painting = false; });
+
+document.getElementById('btnRot').onclick = rotateSel;
+document.getElementById('btnDel').onclick = deleteSel;
+document.getElementById('btnClear').onclick = function(){
+  state.placements = []; state.selPlaced = -1; state.shots = []; state.activeShot = null;
+  renderTray(); renderAll(); renderMyLog();
+};
+document.getElementById('btnRand').onclick = function(){
+  var ids = O.PIECES.filter(function(p){ return state.ext || p.base; })
+                    .map(function(p){ return p.id; });
+  var s = O.randomSetup(ids);
+  if (!s){ alert('Aucune disposition valide trouvee, reessayez.'); return; }
+  state.placements = s; state.selPlaced = -1; state.selTray = null;
+  state.shots = []; state.activeShot = null;
+  renderTray(); renderAll(); renderMyLog();
+};
+document.getElementById('btnQuery').onclick = function(){
+  state.query = !state.query;
+  this.classList.toggle('on', state.query);
+  if (state.query && state.selTray){ state.selTray = null; renderTray(); renderMine(); }
+};
+document.getElementById('chkHide').onchange = function(e){ state.hide = e.target.checked; renderMine(); };
+document.getElementById('chkExt').onchange = function(e){ state.ext = e.target.checked; renderTray(); };
+document.getElementById('btnWipe').onclick = function(){
+  state.sheet = {}; state.marks = {}; renderSheet();
+};
+document.getElementById('noteForm').onsubmit = function(e){ e.preventDefault(); addNote(false); };
+document.getElementById('btnAbs').onclick = function(){ addNote(true); };
+document.getElementById('btnClearLog').onclick = function(){
+  state.notes = []; renderSheet(); renderNotes();
+};
+document.getElementById('btnAide').onclick = function(){
+  var c = document.getElementById('combos');
+  var hidden = c.style.display === 'none';
+  c.style.display = hidden ? '' : 'none';
+  this.textContent = hidden ? 'Masquer' : 'Afficher';
+};
+window.addEventListener('keydown', function(e){
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === 'r' || e.key === 'R') rotateSel();
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSel();
+});
+
+// disposition de depart : l'exemple imprime dans le livret
+state.placements = [
+  { pieceId:'para',   rot:0, x:0, y:1 },
+  { pieceId:'grandB', rot:1, x:7, y:0 },
+  { pieceId:'carre',  rot:0, x:1, y:4 },
+  { pieceId:'moyen',  rot:0, x:3, y:6 },
+  { pieceId:'grandW', rot:0, x:6, y:6 }
+];
+renderCombos(); fillColorSelect();
+renderTray(); renderPalette(); renderAll(); renderMyLog(); renderNotes();
+})();
+</script>
+</body>
+</html>
