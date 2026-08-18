@@ -116,8 +116,10 @@
       poly: [[1, 0], [3, 0], [2, 1], [0, 1]] },
     { id: 'diamant', nom: 'Diamant',        color: 'D', base: false,
       poly: [[0, 0], [2, 0], [1, 1]] },
+    // Le corps noir n'est pas une piece de tangram : c'est une pyramide posee
+    // sur sa base rectangulaire, donc une empreinte de 2 x 1 cases.
     { id: 'noir',   nom: 'Corps noir',      color: 'K', base: false,
-      poly: [[0, 0], [2, 0], [1, 1]] }
+      poly: [[0, 0], [2, 0], [2, 1], [0, 1]] }
   ];
 
   function pieceById(id) {
@@ -249,6 +251,35 @@
     var ri = LETTERS_ROW.indexOf(label);
     if (ri >= 0) return { x: 0, y: ri + 0.5, dx: 1, dy: 0 };                     // gauche -> droite
     return null;
+  }
+
+  // Sur quelle ligne / colonne se trouve un repere de bord ?
+  // Deux reperes de meme axe et meme index sont face a face (ex. A et 11).
+  function labelPos(label) {
+    if (!label) return null;
+    var n = parseInt(label, 10);
+    if (!isNaN(n) && String(n) === label) {
+      if (n >= 1 && n <= 10) return { axis: 'col', i: n - 1 };     // haut
+      if (n >= 11 && n <= 18) return { axis: 'row', i: n - 11 };   // droite
+      return null;
+    }
+    var ci = LETTERS_COL.indexOf(label);
+    if (ci >= 0) return { axis: 'col', i: ci };                    // bas
+    var ri = LETTERS_ROW.indexOf(label);
+    if (ri >= 0) return { axis: 'row', i: ri };                    // gauche
+    return null;
+  }
+
+  // Les cases traversees par un rayon qui va tout droit de a jusqu'a b.
+  // Renvoie null si les deux reperes ne se font pas face.
+  function straightLine(a, b) {
+    var pa = labelPos(a), pb = labelPos(b);
+    if (!pa || !pb || pa.axis !== pb.axis || pa.i !== pb.i) return null;
+    if (a === b) return null;
+    var out = [], k;
+    if (pa.axis === 'row') { for (k = 0; k < COLS; k++) out.push([k, pa.i]); }
+    else                   { for (k = 0; k < ROWS; k++) out.push([pa.i, k]); }
+    return out;
   }
 
   function exitLabel(x, y, dx, dy) {
@@ -424,6 +455,15 @@
     return LETTERS_ROW[p[1]] + (p[0] + 1);
   }
 
+  // « C6 » -> { x: 5, y: 2 }. Renvoie null si ce n'est pas une case du plateau.
+  // Aucune ambiguite avec les reperes de bord : ceux-ci sont soit un nombre
+  // seul (1 a 18), soit une lettre seule (A a R).
+  function cellFromName(name) {
+    var m = /^([A-H])(10|[1-9])$/.exec((name || '').trim().toUpperCase());
+    if (!m) return null;
+    return { x: parseInt(m[2], 10) - 1, y: LETTERS_ROW.indexOf(m[1]) };
+  }
+
   /* --------------------------------------------------- placement aleatoire */
 
   function randomSetup(pieceIds, tries) {
@@ -457,8 +497,10 @@
     rotatePoly: rotatePoly, polyBox: polyBox, placedPoly: placedPoly,
     rasterize: rasterize, cellHalf: cellHalf, HALF_EDGES: HALF_EDGES, HALF_DIAG: HALF_DIAG,
     allEntries: allEntries, entryStart: entryStart,
+    labelPos: labelPos, straightLine: straightLine,
     trace: trace, sonde: sonde, melange: melange,
-    checkRules: checkRules, randomSetup: randomSetup, cellName: cellName
+    checkRules: checkRules, randomSetup: randomSetup,
+    cellName: cellName, cellFromName: cellFromName
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

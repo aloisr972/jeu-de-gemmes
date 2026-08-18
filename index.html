@@ -181,8 +181,12 @@
     <h2>Reponses de l'adversaire</h2>
     <div class="hint" style="margin-top:0">Recopiez ici ce que l'adversaire vous
       annonce dans le chat. Rien n'est verifie ni calcule : la ligne est ajoutee
-      telle quelle. Laissez la sortie vide pour noter la reponse a une question
-      « Qu'y a-t-il en E4 ? ».</div>
+      telle quelle. Pour une question sur une case, tapez la coordonnee a gauche
+      (<b>C6</b>) et laissez la sortie vide.<br>
+      Une reponse <b>transparente / rien</b> barre automatiquement de croix ce
+      qu'elle prouve vide : toute la ligne entre deux reperes qui se font face
+      (A et 11, 3 et K...), ou la seule case interrogee. Une reponse coloree ne
+      declenche rien.</div>
     <form id="noteForm" autocomplete="off">
       <input id="nIn"  placeholder="1"  maxlength="3" aria-label="point d'entree">
       <span class="to">&rarr;</span>
@@ -397,17 +401,19 @@ function renderSheet(){
   });
   // Les reperages de la feuille sont teintes par MES NOTES uniquement,
   // jamais par ce qui est calcule sur mes propres gemmes.
+  // Un rayon transparent ne teinte rien : il remplit la ligne de croix
+  // au moment de la saisie (voir addNote).
   Object.keys(sheetLabels).forEach(function(l){
     sheetLabels[l].setAttribute('fill', '#5b5f68');
   });
   state.notes.forEach(function(n){
+    if (!n.absorbed && n.couleur === 'transparent') return;
     [n.entry, n.exit].forEach(function(l){
       var t = l && sheetLabels[l];
-      if (t) t.setAttribute('fill', n.absorbed ? '#15181f' : shade(n.hex));
+      if (t) t.setAttribute('fill', n.absorbed ? '#15181f' : n.hex);
     });
   });
 }
-function shade(hex){ return hex === '#ffffff' ? '#9a9a9a' : hex; }
 
 function halfPoly(x,y,h){
   var NO=[x,y], NE=[x+1,y], SE=[x+1,y+1], SO=[x,y+1];
@@ -492,6 +498,19 @@ function addNote(absorbed){
   state.notes.unshift(absorbed
     ? { entry:a, exit:null, absorbed:true }
     : { entry:a, exit:b, absorbed:false, couleur:couleur, hex:O.RAY_HEX[couleur] });
+
+  // Une reponse transparente veut dire « le rayon n'a rien rencontre » ou
+  // « il n'y a rien ici » : dans les deux cas on peut barrer d'une croix.
+  if (!absorbed && couleur === 'transparent'){
+    var cells = O.straightLine(a, b);              // rayon traversant : la ligne
+    if (cells){
+      cells.forEach(function(c){ state.marks[key(c[0], c[1])] = 'X'; });
+    } else if (!b){                                // « Qu'y a-t-il en C6 ? » : la case
+      var cell = O.cellFromName(a);
+      if (cell) state.marks[key(cell.x, cell.y)] = 'X';
+    }
+  }
+
   iIn.value = ''; iOut.value = ''; iIn.focus();
   renderSheet(); renderNotes();
 }
@@ -536,7 +555,9 @@ function fillColorSelect(){
   seen['transparent'] = 1;
   Object.keys(seen).forEach(function(n){
     var o = document.createElement('option');
-    o.value = n; o.textContent = n;
+    o.value = n;
+    // « transparent » sert aussi de reponse « Rien » a une question sur une case
+    o.textContent = n === 'transparent' ? 'transparent / rien' : n;
     sel.appendChild(o);
   });
   sel.value = 'bleu';
