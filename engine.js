@@ -31,7 +31,9 @@
     B: { key: 'B', nom: 'Bleu',       fill: '#2b7fd4', edge: '#134f8c' },
     W: { key: 'W', nom: 'Blanc',      fill: '#f3f0e6', edge: '#b9b3a2' },
     D: { key: 'D', nom: 'Diamant',    fill: '#bfe8f4', edge: '#5f9fb1' },
-    K: { key: 'K', nom: 'Corps noir', fill: '#181c24', edge: '#000000' }
+    // contour gris-bleu et non noir : sinon la gemme disparait sur le fond
+    // sombre du bac, et ses lignes de surface ne se voient pas non plus
+    K: { key: 'K', nom: 'Corps noir', fill: '#181c24', edge: '#5b6577' }
   };
 
   // Melange soustractif R/Y/B, eclairci par le blanc.
@@ -75,7 +77,7 @@
     'gris':          '#8a8a8a'
   };
 
-  // Aide de jeu : combinaisons possibles, dans l'ordre du paravent.
+  // Toutes les reponses possibles (sert a remplir le menu de saisie).
   var COMBOS = [
     { in: ['R'], out: 'rouge' },
     { in: ['Y'], out: 'jaune' },
@@ -94,6 +96,22 @@
     { in: ['R', 'Y', 'B', 'W'], out: 'gris' }
   ];
 
+  // Aide de jeu : uniquement les melanges, dans l'ordre exact du paravent.
+  // Lu en deux colonnes, chaque ligne oppose le melange et sa version blanchie.
+  var COMBOS_AIDE = [
+    { in: ['R', 'Y'],           out: 'orange' },
+    { in: ['R', 'Y', 'W'],      out: 'orange clair' },
+    { in: ['R', 'B'],           out: 'violet' },
+    { in: ['R', 'B', 'W'],      out: 'violet clair' },
+    { in: ['Y', 'B'],           out: 'vert' },
+    { in: ['Y', 'B', 'W'],      out: 'vert clair' },
+    { in: ['R', 'W'],           out: 'rose' },
+    { in: ['R', 'Y', 'B'],      out: 'noir' },
+    { in: ['Y', 'W'],           out: 'jaune clair' },
+    { in: ['R', 'Y', 'B', 'W'], out: 'gris' },
+    { in: ['B', 'W'],           out: 'bleu ciel' }
+  ];
+
   function melange(set) {
     var p = ['R', 'Y', 'B'].filter(function (c) { return set.indexOf(c) >= 0; }).join('');
     return set.indexOf('W') >= 0 ? MIX_WHITE[p] : MIX_BASE[p];
@@ -110,9 +128,9 @@
       poly: [[0, 0], [4, 0], [2, 2]] },
     { id: 'moyen',  nom: 'Triangle moyen',  color: 'Y', base: true,
       poly: [[0, 0], [2, 0], [2, 2]] },
-    { id: 'carre',  nom: 'Carre',           color: 'W', base: true,
+    { id: 'carre',  nom: 'Carré',           color: 'W', base: true,
       poly: [[1, 0], [2, 1], [1, 2], [0, 1]] },
-    { id: 'para',   nom: 'Parallelogramme', color: 'R', base: true,
+    { id: 'para',   nom: 'Parallélogramme', color: 'R', base: true,
       poly: [[1, 0], [3, 0], [2, 1], [0, 1]] },
     { id: 'diamant', nom: 'Diamant',        color: 'D', base: false,
       poly: [[0, 0], [2, 0], [1, 1]] },
@@ -149,10 +167,22 @@
     };
   }
 
+  // Symetrie par rapport a un axe vertical, puis recalage sur 0,0.
+  function mirrorPoly(poly) {
+    var p = poly.map(function (v) { return [-v[0], v[1]]; });
+    var mnx = Math.min.apply(null, p.map(function (v) { return v[0]; }));
+    return p.map(function (v) { return [v[0] - mnx, v[1]]; });
+  }
+
+  // Le parallelogramme est la seule gemme chirale : sa symetrie n'est pas
+  // atteignable par rotation. Toutes les autres sont leur propre miroir.
+  function isChiral(id) { return id === 'para'; }
+
   // Polygone d'un placement, en coordonnees plateau.
   function placedPoly(pl) {
     var p = pieceById(pl.pieceId);
-    return rotatePoly(p.poly, pl.rot).map(function (v) {
+    var base = pl.flip ? mirrorPoly(p.poly) : p.poly;
+    return rotatePoly(base, pl.rot).map(function (v) {
       return [v[0] + pl.x, v[1] + pl.y];
     });
   }
@@ -310,6 +340,9 @@
     var cy = dy > 0 ? 0 : dy < 0 ? ROWS - 1 : Math.floor(y);
 
     var path = [[x, y]];
+    // Couleur du faisceau sur le segment qui PART de chaque point du trajet.
+    // C'est ce qui permet de voir la lumiere se teinter en cours de route.
+    var segColors = [melange([])];
     var hits = [];          // couleurs touchees, dans l'ordre
     var touched = [];       // pieces touchees
     var absorbed = false;
@@ -334,7 +367,7 @@
         if (touched.indexOf(blocker.pieceId) < 0) touched.push(blocker.pieceId);
         if (blocker.color === 'K') { absorbed = true; path.push([x, y]); break; }
         if (blocker.color !== 'D' && hits.indexOf(blocker.color) < 0) hits.push(blocker.color);
-        path.push([x, y]);
+        path.push([x, y]); segColors.push(melange(hits));
         dx = -dx; dy = -dy;
         cx += dx; cy += dy;
         continue;
@@ -347,6 +380,7 @@
       path.push([mx, my]);
       if (occu.color === 'K') { absorbed = true; break; }
       if (occu.color !== 'D' && hits.indexOf(occu.color) < 0) hits.push(occu.color);
+      segColors.push(melange(hits));
 
       var nd = reflectDiag(dx, dy, HALF_DIAG[occu.half]);
       dx = nd.dx; dy = nd.dy;
@@ -356,7 +390,7 @@
 
     if (absorbed) {
       return { entry: label, exit: null, absorbed: true, couleur: null,
-               hex: null, path: path, touched: touched };
+               hex: null, path: path, segColors: segColors, touched: touched };
     }
     path.push([x, y]);
     var couleur = melange(hits);
@@ -367,6 +401,7 @@
       couleur: couleur,
       hex: RAY_HEX[couleur],
       path: path,
+      segColors: segColors,     // segColors[i] : couleur du segment i -> i+1
       touched: touched
     };
   }
@@ -380,7 +415,7 @@
     list.forEach(function (o) {
       if (cols.indexOf(o.color) < 0) { cols.push(o.color); }
     });
-    if (cols.indexOf('K') >= 0) return { texte: 'Le signal a ete absorbe', colors: cols };
+    if (cols.indexOf('K') >= 0) return { texte: 'Le signal a été absorbé', colors: cols };
     cols.forEach(function (c) {
       noms.push(c === 'D' ? 'le diamant' : 'une gemme ' + GEM_COLORS[c].nom.toLowerCase());
     });
@@ -397,7 +432,7 @@
     placements.forEach(function (pl) {
       var bb = polyBox(placedPoly(pl));
       if (bb.x0 < 0 || bb.y0 < 0 || bb.x0 + bb.w > COLS || bb.y0 + bb.h > ROWS) {
-        problems.push({ rule: 'c', msg: pieceById(pl.pieceId).nom + ' depasse du plateau.' });
+        problems.push({ rule: 'c', msg: pieceById(pl.pieceId).nom + ' dépasse du plateau.' });
       }
     });
 
@@ -407,7 +442,7 @@
       if (l.length > 1) {
         var ids = l.map(function (o) { return o.pieceId; });
         if (ids[0] !== ids[1]) {
-          problems.push({ rule: 'd', msg: 'Deux gemmes se chevauchent ou sont cote a cote en ' + cellName(k) + '.' });
+          problems.push({ rule: 'd', msg: 'Deux gemmes se chevauchent ou sont côte à côte en ' + cellName(k) + '.' });
         }
       }
     });
@@ -423,7 +458,7 @@
           b.forEach(function (ob) {
             if (ob.pieceId === oa.pieceId) return;
             if (HALF_EDGES[ob.half].indexOf(d[3]) < 0) return;
-            problems.push({ rule: 'd', msg: 'Gemmes cote a cote (arete commune) pres de ' + cellName(k) + '.' });
+            problems.push({ rule: 'd', msg: 'Gemmes côte à côte (arête commune) près de ' + cellName(k) + '.' });
           });
         });
       });
@@ -475,11 +510,13 @@
         var placed = false;
         for (var a = 0; a < 250 && !placed; a++) {
           var rot = Math.floor(Math.random() * 4);
-          var poly = rotatePoly(pieceById(pieceIds[i]).poly, rot);
-          var bb = polyBox(poly);
+          var flip = isChiral(pieceIds[i]) && Math.random() < 0.5 ? 1 : 0;
+          var trial = { pieceId: pieceIds[i], rot: rot, flip: flip, x: 0, y: 0 };
+          var bb = polyBox(placedPoly(trial));
           var px = Math.floor(Math.random() * (COLS - bb.w + 1));
           var py = Math.floor(Math.random() * (ROWS - bb.h + 1));
-          var cand = placements.concat([{ pieceId: pieceIds[i], rot: rot, x: px, y: py }]);
+          trial.x = px; trial.y = py;
+          var cand = placements.concat([trial]);
           if (!checkRules(cand, true).length) { placements = cand; placed = true; }
         }
         if (!placed) ok = false;
@@ -491,10 +528,12 @@
 
   var API = {
     COLS: COLS, ROWS: ROWS,
-    GEM_COLORS: GEM_COLORS, RAY_HEX: RAY_HEX, COMBOS: COMBOS,
+    GEM_COLORS: GEM_COLORS, RAY_HEX: RAY_HEX,
+    COMBOS: COMBOS, COMBOS_AIDE: COMBOS_AIDE,
     PIECES: PIECES, pieceById: pieceById,
     LETTERS_ROW: LETTERS_ROW, LETTERS_COL: LETTERS_COL,
-    rotatePoly: rotatePoly, polyBox: polyBox, placedPoly: placedPoly,
+    rotatePoly: rotatePoly, mirrorPoly: mirrorPoly, isChiral: isChiral,
+    polyBox: polyBox, placedPoly: placedPoly,
     rasterize: rasterize, cellHalf: cellHalf, HALF_EDGES: HALF_EDGES, HALF_DIAG: HALF_DIAG,
     allEntries: allEntries, entryStart: entryStart,
     labelPos: labelPos, straightLine: straightLine,
