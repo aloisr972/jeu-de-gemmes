@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Orapa Mine — prototype</title>
+<title>Orapa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
   /* ==========================================================================
      DEUX THEMES, une seule interface.
@@ -36,39 +36,101 @@
     --fossil:#d8bba2;
     --texture:none;
   }
+  /* ---- « space » : vu depuis l'orbite ----
+     Deux nappes de nebuleuse tres diffuses sur un noir bleute, puis un champ
+     d'etoiles dessine par le script. Le degrade est attache au document :
+     on traverse le champ en faisant defiler.                                */
   :root[data-theme="atelier"]{
-    --bg:#0f1114; --panel:#181b21; --panel2:#14171c;
-    --ink:#e9ecf1; --dim:#99a1ad; --line:#262b33;
-    --btn:#232830; --btn-h:#2c323c; --btn-b:#39404b;
-    --input:#12151a;
+    --bg:#05070f; --panel:#111726; --panel2:#0b101c;
+    --ink:#e8ecf6; --dim:#93a0bb; --line:#222c44;
+    --btn:#1a2338; --btn-h:#243052; --btn-b:#334063;
+    --input:#080c16;
     --texture:none;
   }
-  /* ---------------------------------------------------------- animations ---
-     Le faisceau se propage (beam), les reperes de sortie apparaissent (pop),
-     les gemmes se posent (drop) et se soulevent au survol.
-     Tout est neutralise si le systeme demande moins de mouvement.           */
-  @keyframes beam { to { stroke-dashoffset:0 } }
-  @keyframes pop  { from{ opacity:0; transform:scale(.4) }
-                    to  { opacity:1; transform:scale(1) } }
-  @keyframes drop { 0%  { opacity:0; transform:scale(1.18) }
-                    60% { opacity:1; transform:scale(.97) }
-                    100%{ opacity:1; transform:scale(1) } }
-  @keyframes rise { from{ opacity:0; transform:translateY(6px) }
-                    to  { opacity:1; transform:none } }
+  :root[data-theme="atelier"] body{
+    background-color:#05070f;
+    background-image:
+      radial-gradient(60% 40% at 78% 12%, rgba(86,110,210,.16), transparent 70%),
+      radial-gradient(50% 35% at 12% 46%, rgba(150,80,190,.12), transparent 72%),
+      radial-gradient(70% 45% at 55% 88%, rgba(40,120,170,.10), transparent 70%),
+      linear-gradient(180deg, #080c1a 0%, #05070f 45%, #02030a 100%);
+    background-repeat:no-repeat;
+  }
+  /* ============================================================ mouvement ===
+     Une seule regle : chaque animation doit avoir une raison. Le faisceau
+     explique le trajet, la pose confirme l'action, la pression confirme le
+     clic. Rien n'anime pour decorer.
+     Les courbes natives manquent de franchise : on utilise des variantes
+     plus marquees, et jamais « ease-in » sur de l'interface — il retarde le
+     mouvement au moment precis ou l'oeil regarde.                           */
+  :root{
+    --ease-out:cubic-bezier(.23, 1, .32, 1);
+    --ease-in-out:cubic-bezier(.77, 0, .175, 1);
+    --dur-press:120ms;   /* retour de pression      */
+    --dur-hover:150ms;   /* survol, changement de teinte */
+    --dur-pop:200ms;     /* fenetres, apparitions   */
+  }
+
+  @keyframes beam    { to  { stroke-dashoffset:0 } }
+  /* rien n'apparait a partir de rien : on part d'une echelle deja visible */
+  @keyframes pop     { from{ opacity:0; transform:scale(.92) }
+                       to  { opacity:1; transform:none } }
+  @keyframes drop    { 0%  { opacity:0; transform:scale(1.08) }
+                       55% { opacity:1; transform:scale(.985) }
+                       100%{ opacity:1; transform:none } }
+  @keyframes rise    { from{ opacity:0; transform:translateY(6px) }
+                       to  { opacity:1; transform:none } }
+  @keyframes fadeIn  { from{ opacity:0 } to{ opacity:1 } }
+  @keyframes cardIn  { from{ opacity:0; transform:scale(.96) }
+                       to  { opacity:1; transform:none } }
+  @keyframes lineIn  { from{ opacity:0; transform:translateY(-5px) }
+                       to  { opacity:1; transform:none } }
   circle[style*="pop"]{ transform-box:fill-box; transform-origin:50% 50% }
 
-  /* les gemmes posees : leger soulevement au survol et a la selection */
-  .gemShape{ transform-box:fill-box; transform-origin:50% 50%;
-    transition:transform .18s cubic-bezier(.2,.8,.3,1) }
-  .gemShape:hover{ transform:scale(1.035) }
-  .gemShape.sel{ transform:scale(1.05) }
-  .gemShape.posee{ animation:drop .38s cubic-bezier(.2,1.5,.45,1) }
-  .panel, #aidePanel{ animation:rise .45s ease-out both }
-  .panel:nth-of-type(2){ animation-delay:.06s }
-  .panel:nth-of-type(3){ animation-delay:.12s }
+  /* --- retour de pression : tout ce qui se clique doit repondre --- */
+  button, .gem, .sw{ transition:background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease, box-shadow var(--dur-hover) ease,
+    transform var(--dur-press) var(--ease-out) }
+  button:active:not(:disabled), .gem:active, .sw:active{ transform:scale(.97) }
+  button:focus-visible, .gem:focus-visible, .sw:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px }
 
+  /* --- gemmes posees : le survol signale qu'on peut les saisir --- */
+  .gemShape{ transform-box:fill-box; transform-origin:50% 50%;
+    transition:transform var(--dur-hover) var(--ease-out) }
+  .gemShape.sel{ transform:scale(1.04) }
+  .gemShape.posee{ animation:drop 320ms var(--ease-out) }
+  /* le survol n'existe pas au doigt : sans ce garde, un tap le declenche */
+  @media (hover:hover) and (pointer:fine){
+    .gemShape:hover{ transform:scale(1.03) }
+  }
+
+  /* --- la teinte d'un repere change assez souvent pour meriter un fondu --- */
+  #sheet text[data-lab]{ transition:fill 180ms ease }
+
+  /* --- fenetre de saisie : modale, donc centree (pas d'origine au declencheur) --- */
+  #pickPop{ animation:fadeIn var(--dur-pop) ease-out }
+  .pp-card{ animation:cardIn var(--dur-pop) var(--ease-out) }
+  #pickHint{ animation:lineIn 180ms var(--ease-out) }
+  /* seule la ligne qui vient d'etre ajoutee s'anime, pas toute la liste */
+  .shot.neuve{ animation:lineIn 200ms var(--ease-out) }
+
+  /* --- ouverture de page : decalage court, decoratif, jamais bloquant --- */
+  .panel, #aidePanel{ animation:rise 320ms var(--ease-out) both }
+  .panel:nth-of-type(2){ animation-delay:60ms }
+  .panel:nth-of-type(3){ animation-delay:120ms }
+
+  /* Moins de mouvement ne veut pas dire aucune animation : on garde les
+     fondus et les changements de couleur, qui aident a comprendre ; on retire
+     les deplacements et les changements d'echelle. Le faisceau, lui, est
+     trace d'emblee (voir MOTION cote script).                               */
   @media (prefers-reduced-motion: reduce){
-    *, *::before, *::after{ animation:none !important; transition:none !important }
+    .gemShape{ transition-property:none }
+    .gemShape:hover, .gemShape.sel{ transform:none }
+    .gemShape.posee{ animation-name:fadeIn }
+    .panel, #aidePanel{ animation-name:fadeIn }
+    .pp-card, .shot.neuve, #pickHint{ animation-name:fadeIn }
+    button:active:not(:disabled), .gem:active, .sw:active{ transform:none }
   }
 
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
@@ -100,8 +162,8 @@
   }
   /* fossiles et cristaux pris dans la roche, purement decoratifs */
   #deco{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0}
+  #deco > svg[style]{width:100%; height:100%}
   #deco svg{position:absolute; width:auto; height:auto}
-  :root[data-theme="atelier"] #deco{display:none}
   header, main{position:relative; z-index:1}
   h1{font-family:var(--display); font-size:22px; font-weight:600; margin:0;
      letter-spacing:.03em}
@@ -115,7 +177,6 @@
     padding:22px 16px 86px; border-bottom:0; align-items:flex-start;
     background:linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 100%)}
   :root[data-theme="strates"] header h1{color:var(--head-ink)}
-  :root[data-theme="strates"] header .sub{color:var(--head-dim)}
   :root[data-theme="strates"] #themeSwitch button{
     background:rgba(255,255,255,.32); border-color:rgba(67,32,26,.28); color:var(--head-ink)}
   :root[data-theme="strates"] #themeSwitch button.on{
@@ -127,7 +188,19 @@
   #mine svg, #sheet svg{font-family:var(--display)}
   #themeSwitch{margin-left:auto; display:flex; gap:6px}
   #themeSwitch button{font-family:var(--display); font-weight:500}
-  header .sub{color:var(--dim); font-size:12.5px}
+  /* L'onglet « Space » a son identite propre : manuscrit et rouge. Il reste
+     rouge une fois actif — fond rouge, texte creme — car du rouge sur le fond
+     orange de l'etat actif serait illisible. */
+  /* « :root[data-theme] » monte la specificite au-dessus des regles propres au
+     theme « strates », qui sinon reimposeraient leur couleur au bouton. */
+  :root[data-theme] #themeSwitch button[data-theme-btn="atelier"]{
+    font-family:'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
+    font-weight:700; font-size:19px; line-height:1;
+    padding:3px 14px 5px; color:#e0342a}
+  :root[data-theme] #themeSwitch button[data-theme-btn="atelier"]:hover{
+    color:#b8241c}
+  :root[data-theme] #themeSwitch button[data-theme-btn="atelier"].on{
+    background:#cf2a20; border-color:#cf2a20; color:#fff4ec}
   main{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
        gap:16px; padding:16px; align-items:start}
   @media(max-width:1000px){ main{grid-template-columns:minmax(0,1fr)} }
@@ -254,6 +327,20 @@
   .pp-acts #ppOk{background:var(--accent); border-color:var(--accent);
     color:#1b1200; font-weight:600}
 
+  /* ---- compteur de tours ----
+     Il s'incremente des dizaines de fois par partie : pas d'animation.
+     La ligne qui apparait dans le journal confirme deja l'action ; un second
+     accuse de reception pour le meme evenement ne serait que du bruit.      */
+  .panelHead{display:flex; align-items:baseline; gap:12px}
+  .panelHead h2{margin:0}
+  #tourBox{margin-left:auto; display:flex; align-items:baseline; gap:5px;
+    background:var(--btn); border:1px solid var(--btn-b); border-radius:9px;
+    padding:4px 11px}
+  #tourN{font-family:var(--display); font-size:19px; font-weight:600;
+    color:var(--accent); font-variant-numeric:tabular-nums; line-height:1}
+  #tourMot{font-size:11.5px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--dim)}
+
   /* ---- notes de partie ---- */
   #noteForm{display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:12px}
   #noteForm input, #noteForm select{font:inherit; font-size:13px; color:var(--ink);
@@ -288,11 +375,10 @@
 <body>
 
 <header>
-  <h1>Orapa <span>Mine</span></h1>
-  <div class="sub">prototype jouable — bac à sable / éditeur</div>
+  <h1>Orapa</h1>
   <div id="themeSwitch">
-    <button data-theme-btn="strates">Strates</button>
-    <button data-theme-btn="atelier">Atelier</button>
+    <button data-theme-btn="strates">MINE</button>
+    <button data-theme-btn="atelier">Space</button>
   </div>
   <svg id="horizon" viewBox="0 0 1200 96" preserveAspectRatio="none" aria-hidden="true"></svg>
 </header>
@@ -392,7 +478,12 @@
 
   <!-- ================================================ REPONSES NOTEES ==== -->
   <section class="panel" style="grid-column:1/-1">
-    <h2>Réponses de l'adversaire</h2>
+    <div class="panelHead">
+      <h2>Réponses de l'adversaire</h2>
+      <div id="tourBox" title="Nombre de questions posées à l'adversaire">
+        <b id="tourN">0</b><span id="tourMot">tour</span>
+      </div>
+    </div>
     <div class="hint" style="margin-top:0">Recopiez ici ce que l'adversaire vous
       annonce dans le chat. Le plus rapide : <b>cliquez le repère d'entrée sur la
       feuille, puis le repère de sortie</b> — une fenêtre demande la couleur.
@@ -422,7 +513,13 @@
 <script>
 (function(){
 'use strict';
-var O = Orapa, COLS = O.COLS, ROWS = O.ROWS;
+/* Les deux onglets ne changent pas d'habillage : ils changent d'EDITION.
+   `O` est la facade du moteur liee a l'edition courante, et chaque edition
+   garde sa propre partie dans GAMES — plateau, bac, feuille, journal et
+   compteur de tours. Passer de l'une a l'autre et revenir ne perd rien.   */
+var EDITION_DE = { strates: 'mine', atelier: 'space' };
+var VER = 'mine';
+var O = Orapa.ruleset('mine'), COLS = O.COLS, ROWS = O.ROWS;
 var SVGNS = 'http://www.w3.org/2000/svg';
 
 /* ---------------------------------------------------------------- themes
@@ -447,7 +544,7 @@ var THEMES = {
 var T = THEMES.strates;
 
 /* ------------------------------------------------------------------ etat */
-var state = {
+function nouvelleeEtat(){ return {
   placements: [],                    // { pieceId, rot, x, y }
   selTray: null,                     // id de gemme choisie dans le bac
   selPlaced: -1,                     // index dans placements
@@ -463,9 +560,52 @@ var state = {
   brushColor: 'R',
   brushShape: 'full',                // full|NE|NO|SE|SO|X|O|gomme|query
   sheet: {},                         // 'x,y' -> { half, color }
-  marks: {}                          // 'x,y' -> 'X' | 'O'
+  marks: {},                         // 'x,y' -> 'X' | 'O'
+  // Anneaux notes a la main. Meme convention de cle que le moteur :
+  // 'H,x,y' = arete horizontale en haut de la case (x,y),
+  // 'V,x,y' = arete verticale a gauche de la case (x,y).
+  walls: {}                          // cle d'arete -> couleur
+}; }
+
+// Dispositions de depart : l'exemple imprime dans chaque livret.
+var DEPART = {
+  mine: [
+    { pieceId:'para',   rot:0, x:0, y:1 },
+    { pieceId:'grandB', rot:1, x:7, y:0 },
+    { pieceId:'carre',  rot:0, x:1, y:4 },
+    { pieceId:'moyen',  rot:0, x:3, y:6 },
+    { pieceId:'grandW', rot:0, x:6, y:6 }
+  ],
+  space: [
+    { pieceId:'jupiter', rot:0, flip:0, x:1, y:0 },
+    { pieceId:'mars',    rot:0, flip:0, x:9, y:0 },
+    { pieceId:'petite',  rot:0, flip:0, x:7, y:2 },
+    { pieceId:'geante',  rot:1, flip:0, x:0, y:3 },   // grande face contre le bord gauche
+    { pieceId:'saturne', rot:0, flip:0, x:4, y:5 },   // l'anneau deborde de M a R
+    { pieceId:'terre',   rot:0, flip:0, x:9, y:4 }
+  ]
 };
+var GAMES = { mine: nouvelleeEtat(), space: nouvelleeEtat() };
+GAMES.mine.placements  = DEPART.mine.slice();
+GAMES.space.placements = DEPART.space.slice();
+var state = GAMES.mine;
 var occ = {};
+
+// Une div cliquable n'est pas atteignable au clavier. Sans ca, un joueur qui
+// n'utilise pas la souris ne peut ni choisir une gemme ni changer de pinceau.
+function actionnable(node, label, onActivate){
+  node.tabIndex = 0;
+  node.setAttribute('role', 'button');
+  if (label) node.setAttribute('aria-label', label);
+  node.onclick = onActivate;
+  node.onkeydown = function(ev){
+    if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar'){
+      ev.preventDefault();
+      onActivate();
+    }
+  };
+  return node;
+}
 
 function el(tag, attrs, parent){
   var n = document.createElementNS(SVGNS, tag);
@@ -558,7 +698,112 @@ function maxInset(poly){
   return r;
 }
 
+/* ================================================== planetes (edition Space)
+   Une planete n'est pas une pierre taillee : elle n'a ni facette ni arete
+   vive. Le contour reste la geometrie du jeu — octogone, losange, trapeze —
+   mais l'interieur est rendu comme une sphere eclairee : degrade radial pris
+   du meme cote que la lumiere des gemmes, assombrissement du limbe a
+   l'oppose, et quelques bandes horizontales qui rappellent une geante
+   gazeuse. Les bandes sont tirees d'une graine derivee du nom de la piece :
+   une planete garde donc les siennes quand on la deplace ou la fait pivoter.
+                                                                            */
+function graine(str){
+  var h = 2166136261;
+  for (var i = 0; i < str.length; i++){
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function drawPlanet(g, poly, colorKey, opts){
+  opts = opts || {};
+  var c = O.GEM_COLORS[colorKey];
+  var uid = 'pl' + (drawPlanet.n = (drawPlanet.n||0) + 1);
+  var wrap = el('g', {}, g);
+  var bb = O.polyBox(poly);
+  var cx = bb.x0 + bb.w/2, cy = bb.y0 + bb.h/2;
+  var r  = Math.max(bb.w, bb.h) * 0.62;
+
+  // --- ombre portee, identique aux gemmes pour que les deux editions
+  //     partagent la meme lumiere
+  if (opts.shadow){
+    [[0.13, 0.19, .13], [0.07, 0.10, .16]].forEach(function(o){
+      el('polygon', { points: polyPoints(poly.map(function(p){
+        return [p[0]+o[0], p[1]+o[1]]; })),
+        fill:'#000', 'fill-opacity':o[2], 'stroke-linejoin':'round' }, wrap);
+    });
+  }
+
+  var body = el('g', { opacity: opts.ghost ? .45 : 1 }, wrap);
+  var defs = el('defs', {}, body);
+
+  // le disque eclaire : clair du cote de la lumiere, sombre au limbe oppose
+  var grd = el('radialGradient', { id: uid+'g', gradientUnits:'userSpaceOnUse',
+    cx: cx + LIGHT[0]*r*0.45, cy: cy + LIGHT[1]*r*0.45, r: r*1.55 }, defs);
+  el('stop', { offset:'0%',   'stop-color': shade(c.fill, 1.30) }, grd);
+  el('stop', { offset:'42%',  'stop-color': shade(c.fill, 1.04) }, grd);
+  el('stop', { offset:'78%',  'stop-color': shade(c.fill, 0.74) }, grd);
+  el('stop', { offset:'100%', 'stop-color': shade(c.fill, 0.50) }, grd);
+
+  var clip = el('clipPath', { id: uid+'c' }, defs);
+  el('polygon', { points: polyPoints(poly) }, clip);
+
+  // fond plein d'abord : si un navigateur ignore le degrade, la planete
+  // reste lisible et de la bonne couleur
+  el('polygon', { points: polyPoints(poly), fill: c.fill }, body);
+  el('polygon', { points: polyPoints(poly), fill: 'url(#'+uid+'g)' }, body);
+
+  // --- bandes, seulement si la planete est assez grande pour les porter
+  var dedans = el('g', { 'clip-path':'url(#'+uid+'c)' }, body);
+  if (bb.h >= 2 && opts.pieceId){
+    var rnd = rng(graine(opts.pieceId));
+    var n = 3 + Math.floor(rnd() * 3);
+    for (var i = 0; i < n; i++){
+      var ty = bb.y0 + bb.h * (0.12 + 0.76 * rnd());
+      var th = bb.h * (0.045 + 0.075 * rnd());
+      var clair = rnd() < .5;
+      el('rect', { x: bb.x0 - .2, y: ty, width: bb.w + .4, height: th,
+        fill: shade(c.fill, clair ? 1.18 : 0.80),
+        'fill-opacity': .30 + .22 * rnd() }, dedans);
+    }
+  }
+
+  // --- reflet : une tache douce du cote eclaire
+  var gl = el('radialGradient', { id: uid+'s', gradientUnits:'userSpaceOnUse',
+    cx: cx + LIGHT[0]*r*0.52, cy: cy + LIGHT[1]*r*0.52, r: r*0.55 }, defs);
+  el('stop', { offset:'0%',   'stop-color':'#fff', 'stop-opacity':.40 }, gl);
+  el('stop', { offset:'100%', 'stop-color':'#fff', 'stop-opacity':0 }, gl);
+  el('polygon', { points: polyPoints(poly), fill:'url(#'+uid+'s)' }, dedans);
+
+  // --- contour : sombre partout, eclairci la ou la lumiere frappe
+  el('polygon', { points: polyPoints(poly), fill:'none',
+    stroke: shade(c.fill, 0.42), 'stroke-width':.05,
+    'stroke-linejoin':'round', 'stroke-opacity':.8 }, body);
+  for (var k = 0; k < poly.length; k++){
+    var a = poly[k], b2 = poly[(k+1) % poly.length];
+    var ex = b2[0]-a[0], ey = b2[1]-a[1], L = Math.hypot(ex, ey) || 1;
+    var nx = ey/L, ny = -ex/L;                       // normale a l'arete
+    var mx = (a[0]+b2[0])/2, my = (a[1]+b2[1])/2;
+    if ((mx-cx)*nx + (my-cy)*ny < 0){ nx = -nx; ny = -ny; }   // vers l'exterieur
+    var d = nx*LIGHT[0] + ny*LIGHT[1];
+    if (d <= .25) continue;
+    el('line', { x1:a[0], y1:a[1], x2:b2[0], y2:b2[1],
+      stroke: shade(c.fill, 1.5), 'stroke-width':.05,
+      'stroke-opacity': .25 + .5*d, 'stroke-linecap':'round' }, body);
+  }
+
+  if (opts.selected)
+    el('polygon', { points: polyPoints(poly), fill:'none', stroke:'var(--accent)',
+      'stroke-width': .09, 'stroke-linejoin':'round' }, wrap);
+  return wrap;
+}
+
 function drawGem(g, poly, colorKey, opts){
+  // Space ne taille pas ses pieces : ce sont des planetes.
+  if (VER === 'space' && !(opts && opts.tailler))
+    return drawPlanet(g, poly, colorKey, opts);
+
   opts = opts || {};
   var c = O.GEM_COLORS[colorKey];
   var uid = 'clip'+(drawGem.n = (drawGem.n||0)+1);
@@ -635,20 +880,28 @@ var MOTION = (function(){
   catch(e){ return true; }
 })();
 
-var BEAM_DUR = 0.9;   // secondes pour parcourir tout le trajet
+// Assez lent pour qu'on suive le trajet et la montee en couleur, assez court
+// pour ne pas peser au vingtieme tir de la partie.
+var BEAM_DUR = 0.55;
 
 function drawBeam(layer, s){
   var pts = s.path, seg = s.segColors || [], i;
+  // Meme logique que les infobulles : la premiere fois on explique, ensuite on
+  // ne fait plus attendre. Relire un tir du journal l'affiche d'emblee.
+  var anime = MOTION && s.neuf;
+  s.neuf = false;
   var lens = [], total = 0;
   for (i = 0; i < pts.length-1; i++){
     var d = Math.hypot(pts[i+1][0]-pts[i][0], pts[i+1][1]-pts[i][1]);
     lens.push(d); total += d;
   }
-  if (!total) return;
-
+  // Un corps noir colle au bord absorbe le rayon des l'entree : le trajet est
+  // alors de longueur nulle. On ne dessine pas de segment, mais il faut quand
+  // meme montrer le point d'entree et le signal absorbe, sinon le joueur tire
+  // et ne voit rien du tout.
   var hidden = state.hide;
   var cum = 0;
-  for (i = 0; i < pts.length-1; i++){
+  for (i = 0; total && i < pts.length-1; i++){
     var col = O.RAY_HEX[seg[i]] || '#d8d8d8';
     if (s.absorbed && i === pts.length-2) col = '#2a2a2a';
     var A = pts[i], B = pts[i+1], len = lens[i];
@@ -661,7 +914,7 @@ function drawBeam(layer, s){
       var ln = el('line', { x1:A[0], y1:A[1], x2:B[0], y2:B[1],
         stroke: col, 'stroke-width': spec[0], 'stroke-opacity': spec[1],
         'stroke-linecap': k === 2 ? 'round' : 'butt' }, layer);
-      if (MOTION){
+      if (anime){
         ln.setAttribute('stroke-dasharray', len);
         ln.setAttribute('stroke-dashoffset', len);
         ln.setAttribute('style',
@@ -676,7 +929,7 @@ function drawBeam(layer, s){
   el('circle', { cx:a[0], cy:a[1], r:.15, fill:'#fff',
     stroke:'#000', 'stroke-width':.035, 'stroke-opacity':.5 }, layer);
 
-  if (!hidden && MOTION){
+  if (!hidden && anime){
     // tete lumineuse qui court le long du trajet
     var head = el('circle', { r:.13, fill:'#fff', 'fill-opacity':.95 }, layer);
     el('animateMotion', { dur: BEAM_DUR + 's', fill:'freeze', calcMode:'linear',
@@ -690,15 +943,16 @@ function drawBeam(layer, s){
   if (!s.absorbed){
     var out = el('circle', { cx:b[0], cy:b[1], r:.17, fill:s.hex,
       stroke:'#000', 'stroke-width':.035, 'stroke-opacity':.5 }, layer);
-    if (MOTION) out.setAttribute('style',
-      'opacity:0; animation: pop .45s cubic-bezier(.2,1.4,.4,1) ' +
+    if (anime) out.setAttribute('style',
+      'opacity:0; animation: pop 260ms var(--ease-out) ' +
       BEAM_DUR.toFixed(2) + 's forwards');
   } else if (!hidden){
     // signal absorbe : une pulsation sombre a l'endroit du corps noir
     var ab = el('circle', { cx:b[0], cy:b[1], r:.22, fill:'none',
       stroke:'#1b1b1b', 'stroke-width':.09 }, layer);
-    if (MOTION) ab.setAttribute('style',
-      'opacity:0; animation: pop .5s ease-out ' + BEAM_DUR.toFixed(2) + 's forwards');
+    if (anime) ab.setAttribute('style',
+      'opacity:0; animation: pop 260ms var(--ease-out) ' +
+      BEAM_DUR.toFixed(2) + 's forwards');
   }
 }
 
@@ -761,8 +1015,12 @@ function setIcon(id, name, label){
 function renderLegende(){
   var ul = document.getElementById('legende');
   ul.innerHTML = '';
-  [['pivoter','Pivoter la gemme'],
-   ['retourner','Retourner (parallélogramme)'],
+  var chirales = O.PIECES.filter(function(p){ return p.chiral; })
+                         .map(function(p){ return p.nom.toLowerCase(); });
+  [['pivoter','Pivoter la pièce'],
+   ['retourner', chirales.length
+       ? 'Retourner (' + chirales.join(', ') + ')'
+       : 'Retourner — aucune pièce de cette édition n\'est chirale'],
    ['retirer','Retirer la gemme sélectionnée'],
    ['vider','Vider le plateau'],
    ['voir','Masquer / revoir mes gemmes']].forEach(function(p){
@@ -853,7 +1111,9 @@ function buildBoard(host, kind){
   // Les reperes sont poses au milieu exact de la bande du cadre (largeur M).
   var LAB = M/2;
   for (var c=1;c<=COLS;c++)  mk(String(c),         c-.5,  -LAB);
-  for (var r=0;r<ROWS;r++)   mk(String(11+r),      COLS+LAB, r+.5);
+  // Les reperes de droite continuent la numerotation du haut : 11-18 sur un
+  // plateau de 10 colonnes, 12-18 sur un plateau de 11.
+  for (var r=0;r<ROWS;r++)   mk(String(COLS+1+r),  COLS+LAB, r+.5);
   for (var c2=0;c2<COLS;c2++)mk(O.LETTERS_COL[c2], c2+.5, ROWS+LAB);
   for (var r2=0;r2<ROWS;r2++)mk(O.LETTERS_ROW[r2], -LAB, r2+.5);
 
@@ -870,8 +1130,10 @@ function renderMine(){
 
   if (!state.hide){
     state.placements.forEach(function(pl, i){
+      drawWalls(L.gems, O.placedWalls(pl), O.pieceById(pl.pieceId).color);
       var g = drawGem(L.gems, O.placedPoly(pl), O.pieceById(pl.pieceId).color,
-                      { selected: !state.locked && state.selPlaced === i,
+                      { pieceId: pl.pieceId,
+                        selected: !state.locked && state.selPlaced === i,
                         shadow: true });
       g.setAttribute('class', 'gemShape'
         + (state.selPlaced === i && !state.locked ? ' sel' : '')
@@ -892,10 +1154,31 @@ function renderMine(){
 
   // fantome de pose
   if (state.selTray && ghost){
-    var p = O.placedPoly({ pieceId:state.selTray, rot:ghost.rot,
-                           flip:ghost.flip, x:ghost.x, y:ghost.y });
-    drawGem(L.hit, p, O.pieceById(state.selTray).color, { ghost:true });
+    var pose = { pieceId:state.selTray, rot:ghost.rot,
+                 flip:ghost.flip, x:ghost.x, y:ghost.y };
+    drawWalls(L.hit, O.placedWalls(pose), O.pieceById(state.selTray).color);
+    drawGem(L.hit, O.placedPoly(pose), O.pieceById(state.selTray).color,
+            { pieceId: state.selTray, ghost:true });
   }
+}
+
+/* ----------------------------------------------------------------- murs
+   L'anneau de Saturne est un segment d'epaisseur nulle pose sur une ligne du
+   quadrillage. A l'ecran il lui faut une epaisseur : on le trace en deux
+   passes, une ombre legerement decalee puis le trait clair, pour qu'il se
+   lise aussi bien sur le plateau sombre que sur la tuile du bac.          */
+function drawWalls(g, walls, colorKey){
+  if (!walls || !walls.length) return;
+  var c = O.GEM_COLORS[colorKey];
+  walls.forEach(function(seg){
+    el('line', { x1:seg[0][0], y1:seg[0][1]+.05, x2:seg[1][0], y2:seg[1][1]+.05,
+      stroke:'#000', 'stroke-opacity':.22, 'stroke-width':.20,
+      'stroke-linecap':'round' }, g);
+    el('line', { x1:seg[0][0], y1:seg[0][1], x2:seg[1][0], y2:seg[1][1],
+      stroke:c.edge, 'stroke-width':.18, 'stroke-linecap':'round' }, g);
+    el('line', { x1:seg[0][0], y1:seg[0][1], x2:seg[1][0], y2:seg[1][1],
+      stroke:c.fill, 'stroke-width':.11, 'stroke-linecap':'round' }, g);
+  });
 }
 
 /* ============================================== rendu feuille solutions == */
@@ -911,6 +1194,18 @@ function renderSheet(){
       'fill-opacity': v.color==='D' ? .5 : (v.color==='W' ? .95 : .85),
       stroke: pale ? T.paleEdge : c.edge,
       'stroke-width': pale ? .06 : .035, 'stroke-linejoin':'round' }, L.gems);
+  });
+  // Anneaux notes a la main, sur les lignes du quadrillage. Trace en deux
+  // passes : un contour sombre, puis la couleur — sans quoi un anneau blanc
+  // disparaitrait sur la feuille crème.
+  Object.keys(state.walls).forEach(function(k){
+    var seg = areteSegment(k), c = O.GEM_COLORS[state.walls[k]];
+    var pale = (state.walls[k] === 'W' || state.walls[k] === 'D');
+    el('line',{ x1:seg[0][0], y1:seg[0][1], x2:seg[1][0], y2:seg[1][1],
+      stroke: pale ? T.paleEdge : c.edge, 'stroke-width':.17,
+      'stroke-linecap':'round' }, L.gems);
+    el('line',{ x1:seg[0][0], y1:seg[0][1], x2:seg[1][0], y2:seg[1][1],
+      stroke: c.fill, 'stroke-width':.09, 'stroke-linecap':'round' }, L.gems);
   });
   Object.keys(state.marks).forEach(function(k){
     var p = k.split(',').map(Number), m = state.marks[k];
@@ -960,6 +1255,7 @@ function halfPoly(x,y,h){
 function fire(label){
   var r = O.trace(occ, label);
   if (!r) return;
+  r.neuf = true;                 // seul un tir tout juste calcule s'anime
   state.shots.unshift(r);
   state.activeShot = r;
   renderMine();
@@ -994,7 +1290,8 @@ function logLine(s, list, redraw){
     d.classList.add('clickable');
     d.onclick = function(){ state.activeShot = s; renderMine(); renderMyLog(); };
   }
-  if (s === state.activeShot) d.style.background = '#2a3240';
+  if (s === state.activeShot) d.style.background = 'var(--btn-h)';
+  if (s === noteNeuve) d.classList.add('neuve');
   return d;
 }
 
@@ -1007,6 +1304,10 @@ function renderMyLog(){
   });
 }
 
+// Reference de la ligne qui vient d'etre ajoutee : elle seule s'anime, sinon
+// toute la liste rejouerait son entree a chaque ajout.
+var noteNeuve = null;
+
 // Journal du bas : ce que l'adversaire me repond (saisi a la main).
 function renderNotes(){
   var box = document.getElementById('log');
@@ -1014,6 +1315,16 @@ function renderNotes(){
   state.notes.forEach(function(n){
     box.appendChild(logLine(n, state.notes, function(){ renderSheet(); renderNotes(); }));
   });
+  renderTours();
+}
+
+/* Un tour = une question posee a l'adversaire, donc une reponse notee.
+   Le nombre est DEDUIT de la liste, jamais incremente a part : supprimer une
+   ligne mal saisie le corrige tout seul, et rien ne peut se desynchroniser. */
+function renderTours(){
+  var n = state.notes.length;
+  document.getElementById('tourN').textContent = n;
+  document.getElementById('tourMot').textContent = n > 1 ? 'tours' : 'tour';
 }
 
 /* ======================================== saisie au clic sur la feuille ====
@@ -1094,6 +1405,7 @@ function confirmPick(absorbed){
    Un clic sur Ajouter ajoute la ligne, telle qu'elle a ete tapee.            */
 // Chemin unique d'ajout, partage par la saisie texte et la saisie au clic.
 function pushNote(a, b, couleur, absorbed){
+  noteNeuve = null;
   state.notes.unshift(absorbed
     ? { entry:a, exit:null, absorbed:true }
     : { entry:a, exit:b, absorbed:false, couleur:couleur, hex:O.RAY_HEX[couleur] });
@@ -1109,7 +1421,9 @@ function pushNote(a, b, couleur, absorbed){
       if (cell) state.marks[key(cell.x, cell.y)] = 'X';
     }
   }
+  noteNeuve = state.notes[0];
   renderSheet(); renderNotes();
+  noteNeuve = null;
 }
 
 function addNote(absorbed){
@@ -1120,9 +1434,15 @@ function addNote(absorbed){
 }
 
 /* --------------------------------------------------- aide de jeu : couleurs
-   Reprend le paravent du jeu : chaque couleur est representee par la forme
-   de la gemme qui la porte, pas par une pastille abstraite.                 */
+   MINE reprend le paravent du jeu : chaque couleur y est representee par la
+   forme de la gemme qui la porte, pas par une pastille abstraite — le grand
+   triangle bleu est visiblement plus gros que le jaune.
+
+   Space fait autrement, et sa table de reference aussi : les couleurs y sont
+   de simples carres que l'on additionne. C'est plus lisible, parce que deux
+   planetes peuvent partager une couleur sans partager une silhouette.      */
 var SHAPE_OF = { R:'para', Y:'moyen', B:'grandB', W:'carre', D:'diamant', K:'noir' };
+function aideEnCarres(){ return VER === 'space'; }
 // Pixels par case. Les tailles restent relatives entre gemmes, comme sur le
 // paravent : le grand triangle bleu est visiblement plus gros que le jaune.
 var ICON_UNIT = 8;
@@ -1132,6 +1452,22 @@ var ICON_UNIT = 8;
 var ICON_W = 4.4, ICON_H = 2.3;
 
 function gemIcon(colorKey){
+  var c0 = O.GEM_COLORS[colorKey];
+  if (aideEnCarres()){
+    // Meme fenetre que les figures de Mine, pour que les « + » et les « = »
+    // tombent dans les memes colonnes d'une carte a l'autre.
+    var cote = 1.5;
+    var sq = el('svg',{
+      viewBox: (-ICON_W/2)+' '+(-ICON_H/2)+' '+ICON_W+' '+ICON_H,
+      width: Math.round(ICON_W*ICON_UNIT),
+      height: Math.round(ICON_H*ICON_UNIT) });
+    el('title',{},sq).textContent = c0.nom;
+    el('rect',{ x:-cote/2, y:-cote/2, width:cote, height:cote, rx:.16,
+      fill: c0.fill, 'fill-opacity': colorKey==='D' ? .6 : 1,
+      stroke: (colorKey==='W'||colorKey==='D') ? '#8d8778' : c0.edge,
+      'stroke-width': .1 }, sq);
+    return sq;
+  }
   var p = O.pieceById(SHAPE_OF[colorKey]);
   var bb = O.polyBox(p.poly);
   var cx = bb.x0 + bb.w/2, cy = bb.y0 + bb.h/2;
@@ -1214,7 +1550,21 @@ function renderToggles(){
 }
 
 // Fenetre commune des tuiles du bac, assez large pour le grand triangle (4 x 2).
+/* La fenetre du bac est commune a toutes les tuiles, pour que les tailles
+   relatives des pieces restent lisibles. Elle est donc calculee sur la plus
+   grande piece de l'edition — anneau compris. Mine : 4 x 2. Space : 4 x 3,
+   a cause de l'octogone de Jupiter.                                       */
 var TRAY_W = 4.6, TRAY_H = 2.6;
+function mesureBac(){
+  var w = 0, h = 0;
+  O.PIECES.forEach(function(p){
+    var pts = p.poly.concat.apply(p.poly, (p.walls || []));
+    var bb = O.polyBox(pts);
+    if (bb.w > w) w = bb.w;
+    if (bb.h > h) h = bb.h;
+  });
+  TRAY_W = w + 0.6; TRAY_H = h + 0.6;
+}
 
 /* ------------------------------------------------------ verrou de placement */
 function renderLock(){
@@ -1248,22 +1598,25 @@ function renderTray(){
     d.className = 'gem' + (state.selTray === p.id ? ' sel' : '') + (used ? ' used' : '');
     // fenetre commune, centree sur la gemme : toutes les tuiles sont a la
     // meme echelle et chaque piece y est centree
-    var bb = O.polyBox(p.poly);
+    var pts = p.poly.concat.apply(p.poly, (p.walls || []));
+    var bb = O.polyBox(pts);
     var mx = bb.x0 + bb.w/2, my = bb.y0 + bb.h/2;
     var svg = el('svg',{ viewBox:(mx-TRAY_W/2)+' '+(my-TRAY_H/2)+' '+TRAY_W+' '+TRAY_H });
     d.appendChild(svg);
-    drawGem(svg, p.poly, p.color, {});
+    drawWalls(svg, p.walls, p.color);
+    drawGem(svg, p.poly, p.color, { pieceId: p.id });
     var b = document.createElement('b');
     b.textContent = p.nom;
     d.title = p.nom;
     d.appendChild(b);
-    d.onclick = function(){
+    actionnable(d, p.nom, function(){
       state.selTray = state.selTray === p.id ? null : p.id;
       state.selPlaced = -1;
       ghost = ghost || { x:0, y:0, rot:0 };
       ghost.rot = 0; ghost.flip = 0;
       renderTray(); renderMine(); refreshFlipBtn();
-    };
+    });
+    d.setAttribute('aria-pressed', state.selTray === p.id ? 'true' : 'false');
     tray.appendChild(d);
   });
 }
@@ -1397,14 +1750,25 @@ function deleteSel(){
 }
 
 /* ========================================================== feuille : outils */
-var BRUSHES = [
-  { id:'full', t:'case pleine' }, { id:'NO', t:'moitié NO' }, { id:'NE', t:'moitié NE' },
-  { id:'SO', t:'moitié SO' }, { id:'SE', t:'moitié SE' },
-  { id:'X', t:'marque X' }, { id:'O', t:'marque O' },
-  { id:'gomme', t:'gomme' },
-  // noter la reponse a « Qu'y a-t-il en E4 ? » posee a l'adversaire
-  { id:'caseq', t:'Noter la reponse pour une case' }
-];
+function editionAMurs(){
+  return O.PIECES.some(function(p){ return p.walls && p.walls.length; });
+}
+function BRUSHES(){
+  var l = [
+    { id:'full', t:'case pleine' }, { id:'NO', t:'moitié NO' }, { id:'NE', t:'moitié NE' },
+    { id:'SO', t:'moitié SO' }, { id:'SE', t:'moitié SE' }
+  ];
+  // Un anneau ne se pose pas dans une case : il se pose SUR une ligne du
+  // quadrillage. D'ou un pinceau a part, qui n'apparait que dans les
+  // editions ou une piece en porte un — Space, a cause de Saturne.
+  if (editionAMurs()) l.push({ id:'mur', t:'anneau — trait sur une ligne du quadrillage' });
+  return l.concat([
+    { id:'X', t:'marque X' }, { id:'O', t:'marque O' },
+    { id:'gomme', t:'gomme' },
+    // noter la reponse a « Qu'y a-t-il en E4 ? » posee a l'adversaire
+    { id:'caseq', t:'Noter la reponse pour une case' }
+  ]);
+}
 
 function renderPalette(){
   var cs = document.getElementById('swColors'); cs.innerHTML = '';
@@ -1413,11 +1777,14 @@ function renderPalette(){
     b.className = 'sw' + (state.brushColor===k?' sel':'');
     b.style.background = O.GEM_COLORS[k].fill;
     b.title = O.GEM_COLORS[k].nom;
-    b.onclick = function(){ state.brushColor = k; renderPalette(); };
+    actionnable(b, O.GEM_COLORS[k].nom, function(){
+      state.brushColor = k; renderPalette();
+    });
+    b.setAttribute('aria-pressed', state.brushColor === k ? 'true' : 'false');
     cs.appendChild(b);
   });
   var bs = document.getElementById('swBrushes'); bs.innerHTML = '';
-  BRUSHES.forEach(function(br){
+  BRUSHES().forEach(function(br){
     var b = document.createElement('div');
     b.className = 'sw brush' + (state.brushShape===br.id?' sel':'');
     b.title = br.t;
@@ -1440,24 +1807,67 @@ function renderPalette(){
     } else if (br.id==='gomme'){
       el('path',{d:'M.2,.72 L.55,.25 L.8,.45 L.45,.85 Z',fill:'#e88',stroke:'#a44',
         'stroke-width':.05},svg);
+    } else if (br.id==='mur'){
+      var gm = O.GEM_COLORS[state.brushColor];
+      el('line',{ x1:.08, y1:.5, x2:.92, y2:.5, stroke:T.paleEdge,
+        'stroke-width':.26, 'stroke-linecap':'round' }, svg);
+      el('line',{ x1:.08, y1:.5, x2:.92, y2:.5, stroke:gm.fill,
+        'stroke-width':.16, 'stroke-linecap':'round' }, svg);
     } else if (br.id==='caseq'){
       var q = el('text',{x:.5,y:.63,'text-anchor':'middle','font-size':.62,
         'font-weight':'700',fill:'#1d2029'},svg);
       q.textContent = '?';
     }
     b.appendChild(svg);
-    b.onclick = function(){ state.brushShape = br.id; renderPalette(); };
+    actionnable(b, br.t, function(){ state.brushShape = br.id; renderPalette(); });
+    b.setAttribute('aria-pressed', state.brushShape === br.id ? 'true' : 'false');
     bs.appendChild(b);
   });
 }
 
+/* Arete du quadrillage la plus proche d'un point, ou null si le point est
+   hors plateau. On compare la distance a la ligne horizontale la plus proche
+   et a la verticale la plus proche : la plus courte l'emporte.            */
+function areteProche(p){
+  var yl = Math.round(p.y), xl = Math.round(p.x);
+  var dH = Math.abs(p.y - yl), dV = Math.abs(p.x - xl);
+  var cx = Math.floor(p.x), cy = Math.floor(p.y);
+  var horiz = { k:'H,'+cx+','+yl, ok: cx>=0 && cx<COLS && yl>=0 && yl<=ROWS, d:dH };
+  var vert  = { k:'V,'+xl+','+cy, ok: cy>=0 && cy<ROWS && xl>=0 && xl<=COLS, d:dV };
+  var best = (horiz.d <= vert.d) ? horiz : vert;
+  if (!best.ok) best = (best === horiz) ? vert : horiz;
+  return best.ok ? best.k : null;
+}
+// Segment a tracer pour une arete, en coordonnees plateau.
+function areteSegment(k){
+  var p = k.split(','), x = +p[1], y = +p[2];
+  return p[0] === 'H' ? [[x, y], [x+1, y]] : [[x, y], [x, y+1]];
+}
+
 function paintAt(ev){
   var p = svgPoint(sheet.svg, ev);
+  var s0 = state.brushShape;
+  if (s0 === 'mur'){
+    var ak = areteProche(p);
+    if (!ak) return;
+    // un clic pose l'anneau, un second l'enleve
+    if (state.walls[ak] === state.brushColor) delete state.walls[ak];
+    else state.walls[ak] = state.brushColor;
+    renderSheet();
+    return;
+  }
   var x = Math.floor(p.x), y = Math.floor(p.y);
   if (x<0||x>=COLS||y<0||y>=ROWS) return;
   var k = key(x,y), s = state.brushShape;
   if (s === 'caseq'){ openPickCell(O.cellName(k)); return; }
-  if (s === 'gomme'){ delete state.sheet[k]; delete state.marks[k]; }
+  if (s === 'gomme'){
+    delete state.sheet[k]; delete state.marks[k];
+    // si le point est tout pres d'une ligne, on efface aussi l'anneau pose
+    // dessus : sinon il faudrait rebasculer sur le pinceau pour l'enlever
+    var ag = areteProche(p);
+    if (ag && Math.min(Math.abs(p.y - Math.round(p.y)),
+                       Math.abs(p.x - Math.round(p.x))) < .22) delete state.walls[ag];
+  }
   else if (s === 'X' || s === 'O'){
     state.marks[k] = state.marks[k] === s ? undefined : s;
     if (!state.marks[k]) delete state.marks[k];
@@ -1606,10 +2016,39 @@ var FOSSILES = [
   { k:'cristal',  l:'8%',  t:'86%', s:1.3, o:.11, r:-8 }
 ];
 
+/* Champ d'etoiles. Positions tirees d'un generateur deterministe : le ciel
+   doit etre le meme a chaque chargement, sinon il scintille au moindre
+   changement de theme. Trois plans de profondeur, plus quelques astres plus
+   vifs avec leur halo.                                                      */
+function drawStars(box){
+  var r = rng(20260921);
+  var svg = el('svg', { viewBox:'0 0 100 100', preserveAspectRatio:'none',
+    style:'position:absolute; inset:0; width:100%; height:100%' });
+  //        nombre, rayon,  opacite
+  [[170, .085, .34], [95, .13, .55], [38, .19, .8]].forEach(function(couche){
+    var g = el('g', { fill:'#ffffff', 'fill-opacity':couche[2] }, svg);
+    for (var i = 0; i < couche[0]; i++){
+      el('circle', { cx:(r()*100).toFixed(2), cy:(r()*100).toFixed(2),
+                     r:couche[1] }, g);
+    }
+  });
+  // quelques etoiles plus brillantes, avec halo
+  for (var k = 0; k < 9; k++){
+    var x = (r()*100).toFixed(2), y = (r()*100).toFixed(2);
+    var teinte = ['#ffffff', '#cfe0ff', '#ffe9cf'][Math.floor(r()*3)];
+    el('circle', { cx:x, cy:y, r:.55, fill:teinte, 'fill-opacity':.14 }, svg);
+    el('circle', { cx:x, cy:y, r:.26, fill:teinte, 'fill-opacity':.42 }, svg);
+    el('circle', { cx:x, cy:y, r:.11, fill:teinte }, svg);
+  }
+  box.appendChild(svg);
+}
+
 function drawDeco(){
   var box = document.getElementById('deco');
   box.innerHTML = '';
-  if (document.documentElement.getAttribute('data-theme') !== 'strates') return;
+  var theme = document.documentElement.getAttribute('data-theme');
+  if (theme === 'atelier'){ drawStars(box); return; }
+  if (theme !== 'strates') return;
   FOSSILES.forEach(function(f){
     var s = fossil(f.k);
     s.setAttribute('style',
@@ -1625,6 +2064,24 @@ function drawDeco(){
 function applyTheme(name){
   if (!THEMES[name]) name = 'strates';
   T = THEMES[name];
+
+  /* Changement d'EDITION : on rebranche le moteur sur l'autre plateau et on
+     reprend la partie la ou elle en etait dans cette edition. Les deux etats
+     ne se touchent jamais.                                                 */
+  var ver = EDITION_DE[name];
+  if (ver !== VER){
+    VER = ver;
+    O = Orapa.ruleset(ver);
+    COLS = O.COLS; ROWS = O.ROWS;
+    state = GAMES[ver];
+    ghost = { x:0, y:0, rot:0, flip:0 };
+    cancelPick();
+    // Mine n'a pas d'anneau : le pinceau disparait, il ne faut pas rester
+    // dessus en revenant.
+    if (state.brushShape === 'mur' && !editionAMurs()) state.brushShape = 'full';
+  }
+  mesureBac();
+
   document.documentElement.setAttribute('data-theme', name);
   [].forEach.call(document.querySelectorAll('[data-theme-btn]'), function(b){
     b.classList.toggle('on', b.getAttribute('data-theme-btn') === name);
@@ -1641,7 +2098,10 @@ function applyTheme(name){
   sheet = buildBoard(document.getElementById('sheet'), 'sheet');
   bindBoards();
   drawHorizon(); drawDeco();
+  renderLegende(); renderCombos(); fillColorSelect();
   renderPalette(); renderTray(); renderAll(); renderNotes();
+  renderMyLog(); renderToggles(); renderLock(); renderTours();
+  setIcon('btnFlip', 'retourner', flipTitre());
 }
 
 /* ==================================================================== init */
@@ -1661,7 +2121,9 @@ function bindBoards(){
     painting = true; paintAt(ev);
   });
   sheet.svg.addEventListener('pointermove', function(ev){
-    if (painting && state.brushShape !== 'caseq') paintAt(ev);
+    // « anneau » et « ? » posent une bascule : les repeter au glisser les
+    // ferait clignoter. Ils n'agissent qu'au clic.
+    if (painting && state.brushShape !== 'caseq' && state.brushShape !== 'mur') paintAt(ev);
   });
 }
 window.addEventListener('pointerup', function(){ painting = false; });
@@ -1699,7 +2161,7 @@ document.getElementById('btnExt').onclick = function(){
   state.ext = !state.ext; renderToggles(); renderTray();
 };
 document.getElementById('btnWipe').onclick = function(){
-  state.sheet = {}; state.marks = {}; renderSheet();
+  state.sheet = {}; state.marks = {}; state.walls = {}; renderSheet();
 };
 document.getElementById('ppOk').onclick     = function(){ confirmPick(false); };
 document.getElementById('ppAbs').onclick    = function(){ confirmPick(true); };
@@ -1729,16 +2191,15 @@ window.addEventListener('keydown', function(e){
   if (e.key === 'Escape' && state.pick) cancelPick();
 });
 
-// disposition de depart : l'exemple imprime dans le livret
-state.placements = [
-  { pieceId:'para',   rot:0, x:0, y:1 },
-  { pieceId:'grandB', rot:1, x:7, y:0 },
-  { pieceId:'carre',  rot:0, x:1, y:4 },
-  { pieceId:'moyen',  rot:0, x:3, y:6 },
-  { pieceId:'grandW', rot:0, x:6, y:6 }
-];
+function flipTitre(){
+  var ch = O.PIECES.filter(function(p){ return p.chiral; });
+  return ch.length
+    ? 'Retourner (F) — seul ' + ch.map(function(p){ return p.nom.toLowerCase(); }).join(', ')
+      + ' change de forme'
+    : 'Retourner (F) — aucune pièce de cette édition ne change de forme';
+}
 setIcon('btnRot',   'pivoter',   'Pivoter (R)');
-setIcon('btnFlip',  'retourner', 'Retourner (F) — seul le parallélogramme change de forme');
+setIcon('btnFlip',  'retourner', flipTitre());
 setIcon('btnDel',   'retirer',   'Retirer la gemme sélectionnée (Suppr)');
 setIcon('btnClear', 'vider',     'Vider le plateau');
 renderLegende();

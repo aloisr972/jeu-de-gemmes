@@ -20,8 +20,11 @@
 (function (root) {
   'use strict';
 
-  var COLS = 10;
-  var ROWS = 8;
+  /* ============================================================ VERSIONS ===
+     Le jeu existe en deux editions qui partagent le meme moteur : memes
+     reflexions, memes couleurs, mais des plateaux et des pieces differents.
+     Tout ce qui depend de l'edition est regroupe ici ; le reste du fichier
+     n'en sait rien et travaille sur le « ruleset » qu'on lui passe.        */
 
   /* ---------------------------------------------------------------- couleurs */
 
@@ -121,7 +124,7 @@
   // Polygones canoniques, sommets entiers, coin haut-gauche de la boite en 0,0.
   // Le carre tangram complet fait 4x4 cases : aires 4+4+2+2+2+1+1 = 16.
 
-  var PIECES = [
+  var PIECES_MINE = [
     { id: 'grandB', nom: 'Grand triangle',  color: 'B', base: true,
       poly: [[0, 0], [4, 0], [2, 2]] },
     { id: 'grandW', nom: 'Grand triangle',  color: 'W', base: true,
@@ -130,7 +133,7 @@
       poly: [[0, 0], [2, 0], [2, 2]] },
     { id: 'carre',  nom: 'Carré',           color: 'W', base: true,
       poly: [[1, 0], [2, 1], [1, 2], [0, 1]] },
-    { id: 'para',   nom: 'Parallélogramme', color: 'R', base: true,
+    { id: 'para',   nom: 'Parallélogramme', color: 'R', base: true, chiral: true,
       poly: [[1, 0], [3, 0], [2, 1], [0, 1]] },
     { id: 'diamant', nom: 'Diamant',        color: 'D', base: false,
       poly: [[0, 0], [2, 0], [1, 1]] },
@@ -140,8 +143,54 @@
       poly: [[0, 0], [2, 0], [2, 1], [0, 1]] }
   ];
 
-  function pieceById(id) {
-    for (var i = 0; i < PIECES.length; i++) if (PIECES[i].id === id) return PIECES[i];
+  /* ---------------------------------------------------------- pieces SPACE --
+     Relevees au pixel sur les schemas du livret coreen, sur une grille de
+     11 x 7. Memes contraintes que Mine : sommets sur les coins de la grille,
+     aretes alignees ou a 45 degres.
+
+     Saturne introduit une primitive nouvelle : un MUR, segment d'epaisseur
+     nulle pose sur une ligne de la grille. Les rayons circulant au centre des
+     cases, un mur horizontal n'est jamais rencontre que perpendiculairement,
+     par un rayon vertical, qui rebondit a 180 degres.                       */
+
+  var PIECES_SPACE = [
+    // Octogone : boite 3x3, les quatre coins coupes d'une demi-case — aire 7
+    // Le livret coreen le nomme 목성 (Jupiter) dans son exemple de jeu.
+    { id: 'jupiter', nom: 'Jupiter', color: 'Y', base: true,
+      poly: [[1,0],[2,0],[3,1],[3,2],[2,3],[1,3],[0,2],[0,1]] },
+
+    // Trapeze : base 4, sommet 2, flancs a 45 degres puis verticaux — aire 7
+    // nom inconnu : la plus grande piece du jeu.
+    // Elle se pose toujours grande face contre un bord du plateau : le segment
+    // `grandeFace` suit les rotations de la piece et sert a le verifier.
+    { id: 'geante',  nom: 'Grande planète', color: 'W', base: true,
+      poly: [[1,0],[3,0],[4,1],[4,2],[0,2],[0,1]],
+      grandeFace: [[0,2],[4,2]] },
+
+    // Losange 2x2 (aire 2) traverse d'un ANNEAU : un mur d'epaisseur nulle
+    // pose sur la ligne mediane, prolonge d'une case de chaque cote.
+    { id: 'saturne', nom: 'Saturne', color: 'W', base: true,
+      poly: [[2,0],[3,1],[2,2],[1,1]],
+      walls: [ [[0,1],[1,1]], [[3,1],[4,1]] ] },
+
+    { id: 'terre',   nom: 'Terre', color: 'B', base: true,
+      poly: [[1,0],[2,1],[1,2],[0,1]] },
+    { id: 'mars',    nom: 'Mars', color: 'R', base: true,
+      poly: [[1,0],[2,1],[1,2],[0,1]] },
+
+    // Petite planete : une case pleine
+    { id: 'petite',  nom: 'Petite planète', color: 'R', base: true,   // nom inconnu
+      poly: [[0,0],[1,0],[1,1],[0,1]] },
+
+    // Extension : ni planete ni miroir. Il detruit le rayon au contact et le
+    // devie une fois a 90 degres quand celui-ci le depasse par une case voisine.
+    { id: 'trounoir', nom: 'Trou noir', color: 'K', base: false, trouNoir: true,
+      poly: [[0,0],[1,0],[1,1],[0,1]] }
+  ];
+
+  function pieceById(R, id) {
+    for (var i = 0; i < R.pieces.length; i++)
+      if (R.pieces[i].id === id) return R.pieces[i];
     return null;
   }
 
@@ -174,17 +223,54 @@
     return p.map(function (v) { return [v[0] - mnx, v[1]]; });
   }
 
-  // Le parallelogramme est la seule gemme chirale : sa symetrie n'est pas
-  // atteignable par rotation. Toutes les autres sont leur propre miroir.
-  function isChiral(id) { return id === 'para'; }
+
+  /* Place une piece : polygone ET murs subissent la meme transformation, et
+     le recalage se fait sur leur boite commune — l'anneau de Saturne deborde
+     du losange, il doit compter dans l'encombrement.                        */
+  function placePiece(R, pl) {
+    var p = pieceById(R, pl.pieceId);
+    if (!p) return { poly: [], walls: [], grandeFace: null };
+    var copie = function (seg) { return [[seg[0][0], seg[0][1]], [seg[1][0], seg[1][1]]]; };
+    var poly = p.poly, walls = (p.walls || []).map(copie);
+    var face = p.grandeFace ? copie(p.grandeFace) : null;
+    var neg = function (v) { return [-v[0], v[1]]; };
+    if (pl.flip) {
+      poly = poly.map(neg);
+      walls = walls.map(function (s) { return s.map(neg); });
+      if (face) face = face.map(neg);
+    }
+    var tour = function (v) { return [-v[1], v[0]]; };
+    for (var t = 0; t < ((pl.rot % 4) + 4) % 4; t++) {
+      poly = poly.map(tour);
+      walls = walls.map(function (s) { return s.map(tour); });
+      if (face) face = face.map(tour);
+    }
+    var tous = poly.concat.apply(poly, walls);
+    var mnx = Math.min.apply(null, tous.map(function (v) { return v[0]; }));
+    var mny = Math.min.apply(null, tous.map(function (v) { return v[1]; }));
+    var dep = function (v) { return [v[0] - mnx + pl.x, v[1] - mny + pl.y]; };
+    return { poly: poly.map(dep),
+             walls: walls.map(function (s) { return s.map(dep); }),
+             grandeFace: face ? face.map(dep) : null };
+  }
 
   // Polygone d'un placement, en coordonnees plateau.
-  function placedPoly(pl) {
-    var p = pieceById(pl.pieceId);
-    var base = pl.flip ? mirrorPoly(p.poly) : p.poly;
-    return rotatePoly(base, pl.rot).map(function (v) {
-      return [v[0] + pl.x, v[1] + pl.y];
-    });
+  function placedPoly(R, pl) { return placePiece(R, pl).poly; }
+  // Murs d'un placement (l'anneau de Saturne), en coordonnees plateau.
+  function placedWalls(R, pl) { return placePiece(R, pl).walls; }
+
+  // Cle d'une arete de case : 'H,x,y' = arete horizontale en haut de (x,y),
+  // 'V,x,y' = arete verticale a gauche de (x,y).
+  function wallKeys(seg) {
+    var a = seg[0], b = seg[1], out = [], i;
+    if (a[1] === b[1]) {                         // mur horizontal
+      for (i = Math.min(a[0], b[0]); i < Math.max(a[0], b[0]); i++)
+        out.push('H,' + i + ',' + a[1]);
+    } else {                                     // mur vertical
+      for (i = Math.min(a[1], b[1]); i < Math.max(a[1], b[1]); i++)
+        out.push('V,' + a[0] + ',' + i);
+    }
+    return out;
   }
 
   function pointInPoly(px, py, poly) {
@@ -229,10 +315,20 @@
 
   function key(x, y) { return x + ',' + y; }
 
-  function rasterize(placements) {
-    var occ = {};
+  function rasterize(R, placements) {
+    var occ = {}, murs = {}, trou = null;
     placements.forEach(function (pl) {
-      var poly = placedPoly(pl);
+      var mis = placePiece(R, pl), poly = mis.poly;
+      var piece = pieceById(R, pl.pieceId);
+      mis.walls.forEach(function (seg) {
+        wallKeys(seg).forEach(function (k) {
+          murs[k] = { pieceId: pl.pieceId, color: piece.color };
+        });
+      });
+      if (piece && piece.trouNoir) {
+        var bb = polyBox(poly);
+        trou = { x: Math.floor(bb.x0), y: Math.floor(bb.y0) };
+      }
       var bb = polyBox(poly);
       for (var y = Math.floor(bb.y0); y < bb.y0 + bb.h; y++) {
         for (var x = Math.floor(bb.x0); x < bb.x0 + bb.w; x++) {
@@ -241,12 +337,16 @@
           var k = key(x, y);
           (occ[k] = occ[k] || []).push({
             pieceId: pl.pieceId,
-            color: pieceById(pl.pieceId).color,
+            color: pieceById(R, pl.pieceId).color,
             half: h
           });
         }
       }
     });
+    // attaches en non-enumerable : Object.keys(occ) ne voit toujours que
+    // les cases, tout le code existant continue de fonctionner
+    Object.defineProperty(occ, 'murs', { value: murs, enumerable: false });
+    Object.defineProperty(occ, 'trou', { value: trou, enumerable: false });
     return occ;
   }
 
@@ -256,67 +356,68 @@
   // Bas     : I..R           (colonnes, de gauche a droite)
   // Gauche  : A..H           (lignes, de haut en bas)
 
-  var LETTERS_ROW = 'ABCDEFGH';        // bord gauche + noms de lignes
-  var LETTERS_COL = 'IJKLMNOPQR';      // bord bas
 
-  function allEntries() {
+  function allEntries(R) {
     var out = [];
     var i;
-    for (i = 1; i <= 10; i++) out.push(String(i));            // haut
-    for (i = 11; i <= 18; i++) out.push(String(i));           // droite
-    for (i = 0; i < 10; i++) out.push(LETTERS_COL[i]);        // bas
-    for (i = 0; i < 8; i++) out.push(LETTERS_ROW[i]);         // gauche
+    for (i = 1; i <= R.cols; i++) out.push(String(i));                    // haut
+    for (i = 1; i <= R.rows; i++) out.push(String(R.cols + i));           // droite
+    for (i = 0; i < R.cols; i++) out.push(R.colLetters[i]);               // bas
+    for (i = 0; i < R.rows; i++) out.push(R.rowLetters[i]);               // gauche
     return out;
   }
 
-  function entryStart(label) {
+  function entryStart(R, label) {
     var n = parseInt(label, 10);
     if (!isNaN(n) && String(n) === label) {
-      if (n >= 1 && n <= 10) return { x: n - 0.5, y: 0, dx: 0, dy: 1 };          // haut -> bas
-      if (n >= 11 && n <= 18) return { x: COLS, y: n - 11 + 0.5, dx: -1, dy: 0 };// droite -> gauche
+      if (n >= 1 && n <= R.cols)                                   // haut -> bas
+        return { x: n - 0.5, y: 0, dx: 0, dy: 1 };
+      if (n > R.cols && n <= R.cols + R.rows)                      // droite -> gauche
+        return { x: R.cols, y: n - R.cols - 0.5, dx: -1, dy: 0 };
       return null;
     }
-    var ci = LETTERS_COL.indexOf(label);
-    if (ci >= 0) return { x: ci + 0.5, y: ROWS, dx: 0, dy: -1 };                 // bas -> haut
-    var ri = LETTERS_ROW.indexOf(label);
+    var ci = R.colLetters.indexOf(label);
+    if (ci >= 0) return { x: ci + 0.5, y: R.rows, dx: 0, dy: -1 };                 // bas -> haut
+    var ri = R.rowLetters.indexOf(label);
     if (ri >= 0) return { x: 0, y: ri + 0.5, dx: 1, dy: 0 };                     // gauche -> droite
     return null;
   }
 
   // Sur quelle ligne / colonne se trouve un repere de bord ?
   // Deux reperes de meme axe et meme index sont face a face (ex. A et 11).
-  function labelPos(label) {
+  function labelPos(R, label) {
     if (!label) return null;
     var n = parseInt(label, 10);
     if (!isNaN(n) && String(n) === label) {
-      if (n >= 1 && n <= 10) return { axis: 'col', i: n - 1 };     // haut
-      if (n >= 11 && n <= 18) return { axis: 'row', i: n - 11 };   // droite
+      if (n >= 1 && n <= R.cols) return { axis: 'col', i: n - 1 };            // haut
+      if (n > R.cols && n <= R.cols + R.rows)                                 // droite
+        return { axis: 'row', i: n - R.cols - 1 };
       return null;
     }
-    var ci = LETTERS_COL.indexOf(label);
+    var ci = R.colLetters.indexOf(label);
     if (ci >= 0) return { axis: 'col', i: ci };                    // bas
-    var ri = LETTERS_ROW.indexOf(label);
+    var ri = R.rowLetters.indexOf(label);
     if (ri >= 0) return { axis: 'row', i: ri };                    // gauche
     return null;
   }
 
   // Les cases traversees par un rayon qui va tout droit de a jusqu'a b.
   // Renvoie null si les deux reperes ne se font pas face.
-  function straightLine(a, b) {
-    var pa = labelPos(a), pb = labelPos(b);
+  function straightLine(R, a, b) {
+    var pa = labelPos(R, a), pb = labelPos(R, b);
     if (!pa || !pb || pa.axis !== pb.axis || pa.i !== pb.i) return null;
     if (a === b) return null;
     var out = [], k;
-    if (pa.axis === 'row') { for (k = 0; k < COLS; k++) out.push([k, pa.i]); }
-    else                   { for (k = 0; k < ROWS; k++) out.push([pa.i, k]); }
+    if (pa.axis === 'row') { for (k = 0; k < R.cols; k++) out.push([k, pa.i]); }
+    else                   { for (k = 0; k < R.rows; k++) out.push([pa.i, k]); }
     return out;
   }
 
-  function exitLabel(x, y, dx, dy) {
+  function exitLabel(R, x, y, dx, dy) {
     if (dy < 0 && y <= 0) return String(Math.floor(x) + 1);
-    if (dy > 0 && y >= ROWS) return LETTERS_COL[Math.floor(x)];
-    if (dx > 0 && x >= COLS) return String(11 + Math.floor(y));
-    if (dx < 0 && x <= 0) return LETTERS_ROW[Math.floor(y)];
+    if (dy > 0 && y >= R.rows) return R.colLetters[Math.floor(x)];
+    if (dx > 0 && x >= R.cols) return String(R.cols + 1 + Math.floor(y));
+    if (dx < 0 && x <= 0) return R.rowLetters[Math.floor(y)];
     return null;
   }
 
@@ -330,25 +431,74 @@
 
   /* ------------------------------------------------------------ trace rayon */
 
-  function trace(occ, label) {
-    var st = entryStart(label);
+  function trace(R, occ, label) {
+    var st = entryStart(R, label);
     if (!st) return null;
 
     var x = st.x, y = st.y, dx = st.dx, dy = st.dy;
     // Case dans laquelle on entre :
-    var cx = dx > 0 ? 0 : dx < 0 ? COLS - 1 : Math.floor(x);
-    var cy = dy > 0 ? 0 : dy < 0 ? ROWS - 1 : Math.floor(y);
+    var cx = dx > 0 ? 0 : dx < 0 ? R.cols - 1 : Math.floor(x);
+    var cy = dy > 0 ? 0 : dy < 0 ? R.rows - 1 : Math.floor(y);
 
     var path = [[x, y]];
     // Couleur du faisceau sur le segment qui PART de chaque point du trajet.
     // C'est ce qui permet de voir la lumiere se teinter en cours de route.
     var segColors = [melange([])];
     var hits = [];          // couleurs touchees, dans l'ordre
-    var touched = [];       // pieces touchees
+    var touched = [];       // pieces touchees, dans l'ordre
+    // `vus` ne retient que ce que le rayon rencontre AVANT d'avoir devie :
+    // c'est la vision directe depuis le bord, celle qu'exige la regle e.
+    var vus = [], droit = true;
     var absorbed = false;
 
+    var murs = occ.murs || {}, trou = occ.trou || null;
+    var devie = false;          // le trou noir ne devie qu'une fois par rayon
+    var areteVue = null;        // arete dont on vient de rebondir
+
     for (var guard = 0; guard < 2000; guard++) {
-      if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) break;   // sortie
+      if (cx < 0 || cx >= R.cols || cy < 0 || cy >= R.rows) break;   // sortie
+
+      /* --- un mur sur l'arete que l'on s'apprete a franchir ---
+         Les rayons circulant au centre des cases, un mur n'est jamais
+         rencontre que perpendiculairement : demi-tour franc.               */
+      var arete = dx ? 'V,' + Math.round(x) + ',' + Math.floor(y)
+                     : 'H,' + Math.floor(x) + ',' + Math.round(y);
+      if (murs[arete] && arete !== areteVue) {
+        var mur = murs[arete];
+        if (touched.indexOf(mur.pieceId) < 0) touched.push(mur.pieceId);
+        if (droit) { vus.push(mur.pieceId); droit = false; }
+        if (mur.color === 'K') { absorbed = true; path.push([x, y]); break; }
+        if (mur.color !== 'D' && hits.indexOf(mur.color) < 0) hits.push(mur.color);
+        path.push([x, y]); segColors.push(melange(hits));
+        dx = -dx; dy = -dy;
+        cx += dx; cy += dy;
+        areteVue = arete;       // ne pas la redetecter au retour
+        continue;
+      }
+      areteVue = null;
+
+      /* --- deviation par le trou noir ---
+         Le rayon longe le trou noir sur une case voisine ; c'est une fois
+         AU-DELA, sur la case en diagonale, qu'il tourne de 90 degres vers
+         lui et contourne le coin. Tourner plus tot l'enverrait dedans.
+         Une seule deviation, et aucun changement de couleur.               */
+      if (trou && !devie && !occ[key(cx, cy)]) {
+        var ex = trou.x - cx, ey = trou.y - cy;
+        var px = cx - dx, py = cy - dy;            // case precedente
+        var ortho = Math.abs(trou.x - px) + Math.abs(trou.y - py) === 1;
+        if (Math.abs(ex) === 1 && Math.abs(ey) === 1 && ortho) {
+          var ndx = dx ? 0 : (ex > 0 ? 1 : -1);
+          var ndy = dx ? (ey > 0 ? 1 : -1) : 0;
+          x = cx + 0.5; y = cy + 0.5;
+          path.push([x, y]); segColors.push(melange(hits));
+          dx = ndx; dy = ndy;
+          x += dx * 0.5; y += dy * 0.5;
+          cx += dx; cy += dy;
+          devie = true;
+          droit = false;        // le trou noir a courbe le rayon : plus rien
+          continue;             // de ce qui suit n'est vu « en direct »
+        }
+      }
 
       var list = occ[key(cx, cy)];
       if (!list || !list.length) {
@@ -365,6 +515,7 @@
       if (blocker) {
         // face plate : demi-tour sur le bord de la case
         if (touched.indexOf(blocker.pieceId) < 0) touched.push(blocker.pieceId);
+        if (droit) { vus.push(blocker.pieceId); droit = false; }
         if (blocker.color === 'K') { absorbed = true; path.push([x, y]); break; }
         if (blocker.color !== 'D' && hits.indexOf(blocker.color) < 0) hits.push(blocker.color);
         path.push([x, y]); segColors.push(melange(hits));
@@ -376,6 +527,7 @@
       // face inclinee : reflexion a 90 deg. au centre de la case
       var occu = list[0];
       if (touched.indexOf(occu.pieceId) < 0) touched.push(occu.pieceId);
+      if (droit) { vus.push(occu.pieceId); droit = false; }
       var mx = cx + 0.5, my = cy + 0.5;
       path.push([mx, my]);
       if (occu.color === 'K') { absorbed = true; break; }
@@ -390,25 +542,27 @@
 
     if (absorbed) {
       return { entry: label, exit: null, absorbed: true, couleur: null,
-               hex: null, path: path, segColors: segColors, touched: touched };
+               hex: null, path: path, segColors: segColors,
+               touched: touched, vus: vus };
     }
     path.push([x, y]);
     var couleur = melange(hits);
     return {
       entry: label,
-      exit: exitLabel(x, y, dx, dy),
+      exit: exitLabel(R, x, y, dx, dy),
       absorbed: false,
       couleur: couleur,
       hex: RAY_HEX[couleur],
       path: path,
       segColors: segColors,     // segColors[i] : couleur du segment i -> i+1
-      touched: touched
+      touched: touched,
+      vus: vus                  // vision directe : au plus une piece
     };
   }
 
   /* ----------------------------------------------- "Qu'y a-t-il en E4 ?" */
 
-  function sonde(occ, col, row) {
+  function sonde(R, occ, col, row) {
     var list = occ[key(col, row)];
     if (!list || !list.length) return { texte: 'Rien', colors: [] };
     var noms = [], cols = [];
@@ -424,25 +578,31 @@
 
   /* --------------------------------------------------------- regles a..e */
 
-  function checkRules(placements, skipReach) {
+  function checkRules(R, placements, skipReach) {
     var problems = [];
-    var occ = rasterize(placements);
+    var occ = rasterize(R, placements);
 
     // (c) rester dans le plateau
     placements.forEach(function (pl) {
-      var bb = polyBox(placedPoly(pl));
-      if (bb.x0 < 0 || bb.y0 < 0 || bb.x0 + bb.w > COLS || bb.y0 + bb.h > ROWS) {
-        problems.push({ rule: 'c', msg: pieceById(pl.pieceId).nom + ' dépasse du plateau.' });
+      var mis = placePiece(R, pl);
+      var tous = mis.poly.concat.apply(mis.poly, mis.walls);
+      var bb = polyBox(tous);          // l'anneau compte dans l'encombrement
+      if (bb.x0 < 0 || bb.y0 < 0 || bb.x0 + bb.w > R.cols || bb.y0 + bb.h > R.rows) {
+        problems.push({ rule: 'c', msg: pieceById(R, pl.pieceId).nom + ' dépasse du plateau.' });
       }
     });
 
-    // (d) pas de chevauchement, pas de contact par une arete
+    /* (d) deux gemmes ne peuvent se toucher que par un COIN
+       Ni chevauchement, ni case partagee, ni arete commune : le seul contact
+       tolere est le contact en un point. Deux tests, parce qu'il y a deux
+       geometries distinctes — se partager une case (donc sa diagonale), et
+       se coller le long d'une ligne du quadrillage.                        */
     Object.keys(occ).forEach(function (k) {
       var l = occ[k];
       if (l.length > 1) {
         var ids = l.map(function (o) { return o.pieceId; });
         if (ids[0] !== ids[1]) {
-          problems.push({ rule: 'd', msg: 'Deux gemmes se chevauchent ou sont côte à côte en ' + cellName(k) + '.' });
+          problems.push({ rule: 'd', msg: 'Deux gemmes se partagent la case ' + cellName(R, k) + '.' });
         }
       }
     });
@@ -458,23 +618,67 @@
           b.forEach(function (ob) {
             if (ob.pieceId === oa.pieceId) return;
             if (HALF_EDGES[ob.half].indexOf(d[3]) < 0) return;
-            problems.push({ rule: 'd', msg: 'Gemmes côte à côte (arête commune) près de ' + cellName(k) + '.' });
+            problems.push({ rule: 'd', msg: 'Gemmes collées par une arête près de ' + cellName(R, k) + '.' });
           });
         });
       });
     });
 
-    // (e) chaque gemme doit pouvoir etre atteinte par au moins un rayon
-    var reached = {};
-    if (!skipReach) allEntries().forEach(function (e) {
-      var r = trace(occ, e);
-      if (r) r.touched.forEach(function (id) { reached[id] = true; });
+    /* (d bis) un mur ne traverse pas une autre piece
+       L'anneau de Saturne est une piece de matiere, pas une abstraction : il
+       ne peut pas passer a travers une planete voisine. Comme il repose sur
+       une ligne du quadrillage, il borde deux cases ; toute matiere etrangere
+       dans l'une des deux serait, au mieux, collee contre lui — ce que la
+       regle d interdit deja entre deux pieces.                             */
+    Object.keys(occ.murs || {}).forEach(function (k) {
+      var m = occ.murs[k], p = k.split(',');
+      var cx = +p[1], cy = +p[2];
+      var voisines = p[0] === 'H' ? [[cx, cy - 1], [cx, cy]]   // au-dessus, au-dessous
+                                  : [[cx - 1, cy], [cx, cy]];  // a gauche, a droite
+      voisines.forEach(function (c) {
+        var l = occ[key(c[0], c[1])];
+        if (!l) return;
+        l.forEach(function (o) {
+          if (o.pieceId === m.pieceId) return;
+          problems.push({ rule: 'd', msg: pieceById(R, m.pieceId).nom +
+            ' : son anneau traverse une autre pièce en ' + cellName(R, key(c[0], c[1])) + '.' });
+        });
+      });
     });
-    if (!skipReach) placements.forEach(function (pl) {
-      if (!reached[pl.pieceId]) {
-        problems.push({ rule: 'e', msg: pieceById(pl.pieceId).nom + ' n\'est atteinte par aucun rayon.' });
+
+    /* (f) la grande planete se pose grande face contre un bord
+       Elle est la seule piece contrainte ainsi ; son long cote suit ses
+       rotations (voir `grandeFace` dans le catalogue et dans placePiece).  */
+    placements.forEach(function (pl) {
+      var f = placePiece(R, pl).grandeFace;
+      if (!f) return;
+      var horiz = f[0][1] === f[1][1], vert = f[0][0] === f[1][0];
+      var colle = (horiz && (f[0][1] === 0 || f[0][1] === R.rows)) ||
+                  (vert  && (f[0][0] === 0 || f[0][0] === R.cols));
+      if (!colle) {
+        problems.push({ rule: 'f', msg: pieceById(R, pl.pieceId).nom +
+          ' doit être posée grande face contre un bord du plateau.' });
       }
     });
+
+    /* (e) aucune forme entierement cachee derriere les autres
+       Lecture stricte du livret : « si l'on regarde depuis un bord du
+       plateau ». Une forme est visible si elle est la PREMIERE rencontree
+       par l'un des 36 rayons, avant tout rebond et toute deviation — un
+       contact obtenu apres reflexion ne compte pas.                        */
+    if (!skipReach) {
+      var vues = {};
+      allEntries(R).forEach(function (e) {
+        var r = trace(R, occ, e);
+        if (r) r.vus.forEach(function (id) { vues[id] = true; });
+      });
+      placements.forEach(function (pl) {
+        if (!vues[pl.pieceId]) {
+          problems.push({ rule: 'e', msg: pieceById(R, pl.pieceId).nom +
+            ' est entièrement cachée : aucun rayon direct ne l\'atteint.' });
+        }
+      });
+    }
 
     // dedoublonnage
     var seen = {}, out = [];
@@ -485,24 +689,33 @@
     return out;
   }
 
-  function cellName(k) {
+  function cellName(R, k) {
     var p = k.split(',').map(Number);
-    return LETTERS_ROW[p[1]] + (p[0] + 1);
+    return R.rowLetters[p[1]] + (p[0] + 1);
   }
 
   // « C6 » -> { x: 5, y: 2 }. Renvoie null si ce n'est pas une case du plateau.
   // Aucune ambiguite avec les reperes de bord : ceux-ci sont soit un nombre
   // seul (1 a 18), soit une lettre seule (A a R).
-  function cellFromName(name) {
-    var m = /^([A-H])(10|[1-9])$/.exec((name || '').trim().toUpperCase());
+  function cellFromName(R, name) {
+    var t = (name || '').trim().toUpperCase();
+    var m = /^([A-Z])(\d{1,2})$/.exec(t);
     if (!m) return null;
-    return { x: parseInt(m[2], 10) - 1, y: LETTERS_ROW.indexOf(m[1]) };
+    var y = R.rowLetters.indexOf(m[1]), x = parseInt(m[2], 10) - 1;
+    if (y < 0 || x < 0 || x >= R.cols) return null;
+    return { x: x, y: y };
   }
 
   /* --------------------------------------------------- placement aleatoire */
 
-  function randomSetup(pieceIds, tries) {
+  function randomSetup(R, pieceIds, tries) {
     tries = tries || 4000;
+    // Les pieces les plus contraintes passent en premier, sinon les autres
+    // leur mangent les bords et le tirage echoue sans raison.
+    pieceIds = pieceIds.slice().sort(function (a, b) {
+      var pa = pieceById(R, a), pb = pieceById(R, b);
+      return (pb && pb.grandeFace ? 1 : 0) - (pa && pa.grandeFace ? 1 : 0);
+    });
     for (var t = 0; t < tries; t++) {
       var placements = [];
       var ok = true;
@@ -510,37 +723,114 @@
         var placed = false;
         for (var a = 0; a < 250 && !placed; a++) {
           var rot = Math.floor(Math.random() * 4);
-          var flip = isChiral(pieceIds[i]) && Math.random() < 0.5 ? 1 : 0;
+          var pc = pieceById(R, pieceIds[i]);
+          var flip = (pc && pc.chiral) && Math.random() < 0.5 ? 1 : 0;
           var trial = { pieceId: pieceIds[i], rot: rot, flip: flip, x: 0, y: 0 };
-          var bb = polyBox(placedPoly(trial));
-          var px = Math.floor(Math.random() * (COLS - bb.w + 1));
-          var py = Math.floor(Math.random() * (ROWS - bb.h + 1));
+          var mis0 = placePiece(R, trial);
+          var bb = polyBox(mis0.poly);
+          var px = Math.floor(Math.random() * (R.cols - bb.w + 1));
+          var py = Math.floor(Math.random() * (R.rows - bb.h + 1));
+          /* Piece a grande face : plutot que de tirer au hasard en esperant
+             tomber contre un bord, on colle directement le cote long au bord
+             vers lequel la rotation l'a tourne. L'autre coordonnee reste
+             libre, donc le placement demeure varie.                        */
+          var f0 = mis0.grandeFace;
+          if (f0) {
+            if (f0[0][1] === f0[1][1]) {                 // face horizontale
+              py = (f0[0][1] === bb.y0) ? 0 : R.rows - bb.h;
+            } else {                                     // face verticale
+              px = (f0[0][0] === bb.x0) ? 0 : R.cols - bb.w;
+            }
+          }
           trial.x = px; trial.y = py;
           var cand = placements.concat([trial]);
-          if (!checkRules(cand, true).length) { placements = cand; placed = true; }
+          if (!checkRules(R, cand, true).length) { placements = cand; placed = true; }
         }
         if (!placed) ok = false;
       }
-      if (ok && !checkRules(placements).length) return placements;
+      if (ok && !checkRules(R, placements).length) return placements;
     }
     return null;
   }
 
-  var API = {
-    COLS: COLS, ROWS: ROWS,
-    GEM_COLORS: GEM_COLORS, RAY_HEX: RAY_HEX,
-    COMBOS: COMBOS, COMBOS_AIDE: COMBOS_AIDE,
-    PIECES: PIECES, pieceById: pieceById,
-    LETTERS_ROW: LETTERS_ROW, LETTERS_COL: LETTERS_COL,
-    rotatePoly: rotatePoly, mirrorPoly: mirrorPoly, isChiral: isChiral,
-    polyBox: polyBox, placedPoly: placedPoly,
-    rasterize: rasterize, cellHalf: cellHalf, HALF_EDGES: HALF_EDGES, HALF_DIAG: HALF_DIAG,
-    allEntries: allEntries, entryStart: entryStart,
-    labelPos: labelPos, straightLine: straightLine,
-    trace: trace, sonde: sonde, melange: melange,
-    checkRules: checkRules, randomSetup: randomSetup,
-    cellName: cellName, cellFromName: cellFromName
+  /* ======================================================= jeux de regles ===
+     Chaque edition decrit son plateau et ses pieces ; le moteur ci-dessus
+     n'en sait rien. `ruleset(nom)` renvoie une facade dont toutes les
+     methodes sont deja liees a cette edition, ce qui permet de faire tourner
+     deux parties de front sans qu'elles se melangent.                       */
+
+  var VERSIONS = {
+    mine: {
+      id: 'mine', nom: 'Mine',
+      cols: 10, rows: 8,
+      rowLetters: 'ABCDEFGH',      // bord gauche, et noms de lignes
+      colLetters: 'IJKLMNOPQR',    // bord bas
+      pieces: PIECES_MINE
+    },
+    space: {
+      id: 'space', nom: 'Space',
+      cols: 11, rows: 7,
+      rowLetters: 'ABCDEFG',
+      colLetters: 'HIJKLMNOPQR',
+      pieces: PIECES_SPACE
+    }
   };
+
+  function ruleset(nom) {
+    var R = VERSIONS[nom] || VERSIONS.mine;
+    function lie(fn) {
+      return function () {
+        var args = [R].concat(Array.prototype.slice.call(arguments));
+        return fn.apply(null, args);
+      };
+    }
+    var f = {
+      id: R.id, nom: R.nom,
+      COLS: R.cols, ROWS: R.rows,
+      LETTERS_ROW: R.rowLetters, LETTERS_COL: R.colLetters,
+      PIECES: R.pieces,
+      pieceById:   lie(pieceById),
+      placedPoly:  lie(placedPoly),
+      placedWalls: lie(placedWalls),
+      rasterize:   lie(rasterize),
+      allEntries:  lie(allEntries),
+      entryStart:  lie(entryStart),
+      labelPos:    lie(labelPos),
+      straightLine:lie(straightLine),
+      trace:       lie(trace),
+      sonde:       lie(sonde),
+      checkRules:  lie(checkRules),
+      randomSetup: lie(randomSetup),
+      cellName:    lie(cellName),
+      cellFromName:lie(cellFromName),
+      isChiral: function (id) {
+        var p = pieceById(R, id);
+        return !!(p && p.chiral);
+      }
+    };
+    /* Les donnees communes aux deux editions — couleurs, melanges, geometrie
+       pure — sont recopiees sur la facade. L'interface n'a donc qu'un seul
+       objet a manipuler : elle rebranche `O` sur l'autre edition et tout
+       suit, y compris ce qui ne depend pas du plateau.                     */
+    for (var k in COMMUN) if (!(k in f)) f[k] = COMMUN[k];
+    return f;
+  }
+
+  // Ce qui ne depend ni du plateau ni des pieces.
+  var COMMUN = {
+    GEM_COLORS: GEM_COLORS, RAY_HEX: RAY_HEX,
+    COMBOS: COMBOS, COMBOS_AIDE: COMBOS_AIDE, melange: melange,
+    rotatePoly: rotatePoly, mirrorPoly: mirrorPoly, polyBox: polyBox,
+    cellHalf: cellHalf, HALF_EDGES: HALF_EDGES, HALF_DIAG: HALF_DIAG
+  };
+
+  var API = { VERSIONS: VERSIONS, ruleset: ruleset };
+  for (var ck in COMMUN) API[ck] = COMMUN[ck];
+
+  // L'edition Mine reste accessible directement : tout le code existant
+  // continue de fonctionner sans savoir que les versions existent.
+  var MINE = ruleset('mine');
+  for (var k in MINE) if (!(k in API)) API[k] = MINE[k];
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.Orapa = API;
