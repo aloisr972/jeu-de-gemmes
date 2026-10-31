@@ -257,8 +257,17 @@
 
   /* L'écart de rangée EST la pliure : une marge sur l'élément de grille
      serait prise à l'intérieur de sa rangée et ne séparerait rien. */
+  /* L'écran de l'appareil a des coins arrondis : un cadre collé au bord bas
+     se fait rogner ses angles. On rentre donc le contenu dans la zone sûre,
+     avec un minimum qui tient compte du rayon même quand le navigateur
+     n'annonce aucun retrait. `viewport-fit=cover` est posé dans l'en-tête,
+     sans quoi `env(safe-area-inset-*)` vaudrait toujours zéro. */
   :root[data-pose="pliee"] main{
-    display:grid; gap:var(--charniere, 12px) 10px; padding:10px;
+    display:grid; gap:var(--charniere, 12px) 10px;
+    padding:10px;
+    padding-left:max(10px, env(safe-area-inset-left));
+    padding-right:max(10px, env(safe-area-inset-right));
+    padding-bottom:max(14px, env(safe-area-inset-bottom));
     height:calc(100svh - var(--hEnTete, 52px));
     grid-template-columns:minmax(0,var(--colListe)) minmax(0,1fr);
     grid-template-rows:var(--seg0, 1fr) auto minmax(0,1fr);
@@ -300,11 +309,17 @@
      pour la mise en page. Il faut donc leur rendre une boîte ici, sinon le
      fond et la bordure n'ont rien à peindre. */
   :root[data-pose="pliee"] #carteOutils{
-    display:block; flex:0 1 auto; max-height:55%; min-height:0; overflow:auto }
+    display:block; flex:0 1 auto; max-height:46%; min-height:0; overflow:auto }
+  /* le libellé du verrou tenait sur deux lignes et mangeait la carte */
+  :root[data-pose="pliee"] .lockbtn{
+    padding:7px 10px; font-size:12.5px; width:100% }
   :root[data-pose="pliee"] #carteMylog{
     display:flex; flex-direction:column; flex:1 1 auto; min-height:120px;
     overflow:auto }
-  :root[data-pose="pliee"] #carteMylog #mylog{ flex:1 1 auto; min-height:0 }
+  /* Écrasé à 23 px par le flex, le journal vide laissait sa phrase d'attente
+     déborder par-dessus le dépliant d'aide. Il garde de quoi l'afficher. */
+  :root[data-pose="pliee"] #carteMylog #mylog{
+    flex:1 1 auto; min-height:3.2em; overflow:auto }
   :root[data-pose="pliee"] #minePanel .grpListe > .carte > .row{ margin-top:0 }
   :root[data-pose="pliee"] #titreMylog{ margin:0 0 8px }
   :root[data-pose="pliee"] #minePanel details{ flex:0 0 auto }
@@ -2351,27 +2366,48 @@ function poseEmpilee(){
   return h > w && w >= 600 && h >= 700;
 }
 
-/* Hauteur utile de la moitie haute et epaisseur de la charniere, mesurees
-   quand l'API repond. Sans elle, le CSS partage l'espace en deux a parts
-   egales — ce qui tombe juste, la pliure etant au milieu.                  */
+/* Ou passe la pliure, et quelle epaisseur a-t-elle ?
+
+   Quand l'API repond, on lit les rectangles des deux segments : exact.
+
+   Quand elle ne repond pas — iPhone Duo, drapeaux eteints — il reste une
+   chose connue : la pliure est au milieu de l'ECRAN. Or la page ne commence
+   pas en haut de l'ecran, la barre d'adresse de Safari est au-dessus. Couper
+   la page en deux parts egales place donc le trait trop bas, de la moitie de
+   la hauteur de cette barre. On estime : milieu de l'ecran, moins ce que le
+   navigateur occupe au-dessus.
+
+   L'estimation est bornee entre 30 % et 62 % de la hauteur disponible : une
+   valeur aberrante doit degrader la mise en page, pas la detruire.        */
 function mesurePliure(){
   var r = document.documentElement.style;
+  var entete = document.querySelector('header');
+  var hEnTete = entete ? entete.getBoundingClientRect().height : 52;
+  r.setProperty('--hEnTete', hEnTete + 'px');
+
+  var m = document.querySelector('main');
+  var hautMain = m ? m.getBoundingClientRect().top : hEnTete;
+  var padHaut = 10;
+  var plis = null, epaisseur = 12;
+
   var segs = null;
   try { segs = window.viewport && window.viewport.segments; } catch(e){}
-  var entete = document.querySelector('header');
-  r.setProperty('--hEnTete', (entete ? entete.getBoundingClientRect().height : 52) + 'px');
-  if (!segs || segs.length < 2){
-    r.removeProperty('--seg0'); r.removeProperty('--charniere');
-    return;
+  if (segs && segs.length >= 2){
+    var haut = segs[0], bas = segs[1];
+    if (bas.top < haut.top){ var t = haut; haut = bas; bas = t; }
+    plis = haut.bottom;
+    epaisseur = Math.max(0, bas.top - haut.bottom);
+  } else if (window.screen && window.screen.height && window.innerHeight){
+    var barre = Math.max(0, window.screen.height - window.innerHeight);
+    plis = window.screen.height / 2 - barre;
   }
-  var haut = segs[0], bas = segs[1];
-  if (bas.top < haut.top){ var t = haut; haut = bas; bas = t; }
-  var m = document.querySelector('main');
-  var hautMain = m ? m.getBoundingClientRect().top : 0;
-  // la moitie haute commence sous l'en-tete : on retranche ce qu'elle a deja perdu
-  var utile = Math.max(0, haut.bottom - hautMain - 10);
-  r.setProperty('--seg0', utile + 'px');
-  r.setProperty('--charniere', Math.max(0, bas.top - haut.bottom) + 'px');
+
+  if (plis === null){ r.removeProperty('--seg0'); r.removeProperty('--charniere'); return; }
+
+  var dispo = Math.max(1, window.innerHeight - hautMain - padHaut);
+  var utile = Math.max(dispo * 0.30, Math.min(dispo * 0.62, plis - hautMain - padHaut));
+  r.setProperty('--seg0', Math.round(utile) + 'px');
+  r.setProperty('--charniere', Math.round(epaisseur) + 'px');
 }
 
 var poseCourante = null;
