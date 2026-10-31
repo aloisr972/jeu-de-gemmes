@@ -571,7 +571,8 @@
     });
     if (cols.indexOf('K') >= 0) return { texte: 'Le signal a été absorbé', colors: cols };
     cols.forEach(function (c) {
-      noms.push(c === 'D' ? 'le diamant' : 'une gemme ' + GEM_COLORS[c].nom.toLowerCase());
+      noms.push(c === 'D' ? 'le diamant'
+        : 'une ' + R.motPiece + ' ' + GEM_COLORS[c].nom.toLowerCase());
     });
     return { texte: noms.join(' et '), colors: cols };
   }
@@ -602,7 +603,8 @@
       if (l.length > 1) {
         var ids = l.map(function (o) { return o.pieceId; });
         if (ids[0] !== ids[1]) {
-          problems.push({ rule: 'd', msg: 'Deux gemmes se partagent la case ' + cellName(R, k) + '.' });
+          problems.push({ rule: 'd', msg: 'Deux ' + R.motPieces +
+            ' se partagent la case ' + cellName(R, k) + '.' });
         }
       }
     });
@@ -618,7 +620,8 @@
           b.forEach(function (ob) {
             if (ob.pieceId === oa.pieceId) return;
             if (HALF_EDGES[ob.half].indexOf(d[3]) < 0) return;
-            problems.push({ rule: 'd', msg: 'Gemmes collées par une arête près de ' + cellName(R, k) + '.' });
+            problems.push({ rule: 'd', msg: R.motPiecesMaj +
+              ' collées par une arête près de ' + cellName(R, k) + '.' });
           });
         });
       });
@@ -759,22 +762,43 @@
      methodes sont deja liees a cette edition, ce qui permet de faire tourner
      deux parties de front sans qu'elles se melangent.                       */
 
+  /* Chaque edition apporte aussi son vocabulaire. Sans ca, Space parlerait
+     de « gemmes » et proposerait une pastille « Diamant » qu'aucune de ses
+     pieces ne porte.                                                       */
   var VERSIONS = {
     mine: {
       id: 'mine', nom: 'Mine',
       cols: 10, rows: 8,
       rowLetters: 'ABCDEFGH',      // bord gauche, et noms de lignes
       colLetters: 'IJKLMNOPQR',    // bord bas
-      pieces: PIECES_MINE
+      pieces: PIECES_MINE,
+      motPiece: 'gemme', motPieces: 'gemmes', motPiecesMaj: 'Gemmes',
+      motPanneau: 'Mes gemmes',
+      nomsCouleur: { K: 'Corps noir' }
     },
     space: {
       id: 'space', nom: 'Space',
       cols: 11, rows: 7,
       rowLetters: 'ABCDEFG',
       colLetters: 'HIJKLMNOPQR',
-      pieces: PIECES_SPACE
+      pieces: PIECES_SPACE,
+      motPiece: 'planète', motPieces: 'planètes', motPiecesMaj: 'Planètes',
+      motPanneau: 'Mes planètes',
+      nomsCouleur: { K: 'Trou noir' }
     }
   };
+
+  // Couleurs effectivement portees par les pieces d'une edition, dans
+  // l'ordre de la palette. Space n'a pas de diamant : il ne doit pas en
+  // proposer la pastille.
+  function couleursDe(R) {
+    var ordre = ['R', 'Y', 'B', 'W', 'D', 'K'], vues = {};
+    R.pieces.forEach(function (p) { vues[p.color] = true; });
+    return ordre.filter(function (k) { return vues[k]; });
+  }
+  function nomCouleur(R, k) {
+    return (R.nomsCouleur && R.nomsCouleur[k]) || GEM_COLORS[k].nom;
+  }
 
   function ruleset(nom) {
     var R = VERSIONS[nom] || VERSIONS.mine;
@@ -803,6 +827,10 @@
       randomSetup: lie(randomSetup),
       cellName:    lie(cellName),
       cellFromName:lie(cellFromName),
+      motPiece: R.motPiece, motPieces: R.motPieces,
+      motPiecesMaj: R.motPiecesMaj, motPanneau: R.motPanneau,
+      COULEURS: couleursDe(R),
+      nomCouleur: function (k) { return nomCouleur(R, k); },
       isChiral: function (id) {
         var p = pieceById(R, id);
         return !!(p && p.chiral);

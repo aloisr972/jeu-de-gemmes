@@ -15,11 +15,24 @@
      La police d'affichage est Fredoka (SIL OFL). CookieRun, la police du
      livret, est explicitement interdite a l'industrie du jeu par Devsisters.
      ========================================================================== */
+  /* Les variables d'habillage sont definies par theme, plus bas. Celles-ci
+     sont le filet de securite : si `data-theme` manquait — script interrompu,
+     attribut efface — `var(--bg)` serait invalide et la page s'afficherait
+     en blanc sur blanc, illisible. On repete donc ici les valeurs du theme
+     par defaut. */
   :root{
     --display:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif;
     --accent:#e0a53a;
     --radius:12px;
     --texture:none;
+    --sky1:#eceac4; --sky2:#ded6a8;
+    --hill1:#d9d0ac; --hill2:#b09477; --hill3:#7d5340; --ridge:#4a2519;
+    --bg:#3a1b16; --panel:#48231a; --panel2:#3d1d16;
+    --ink:#f6ead6; --dim:#c0a48c; --line:#63362a;
+    --btn:#5a2e22; --btn-h:#6b382a; --btn-b:#7d4835;
+    --input:#331711;
+    --head-ink:#43201a; --head-dim:#6d4636;
+    --fossil:#d8bba2;
   }
   /* ---- « strates » : coupe geologique, on descend en faisant defiler ----
      Teintes relevees sur le paravent : ciel vert-jaune pale, collines qui
@@ -201,6 +214,200 @@
     color:#b8241c}
   :root[data-theme] #themeSwitch button[data-theme-btn="atelier"].on{
     background:#cf2a20; border-color:#cf2a20; color:#fff4ec}
+  .grpGrille, .grpListe, .carte{display:contents}
+  /* le compteur de réponses n'existe que dans la mise en page pliée */
+  #repBox{display:none}
+  /* en disposition normale, les réponses notées occupent toute la largeur.
+     (En CSS et non en style en ligne : un style en ligne empêcherait la
+     pose pliée de replacer ce panneau.) */
+  #notesPanel{grid-column:1/-1}
+
+  /* ==================================================== POSE PLIÉE =========
+     Téléphone à écran pliable tenu comme un ordinateur portable : charnière
+     horizontale, deux segments empilés, écran intérieur en portrait. C'est
+     la pose où Orapa tombe le mieux — ma mine sur la moitié haute, la feuille
+     de l'adversaire sur la basse, et rien qui traverse la pliure.
+
+     L'attribut `data-pose` est posé par le script, qui essaie d'abord
+     `vertical-viewport-segments` puis se rabat sur la taille de l'écran :
+     sur iPhone Duo les API de pliure sont derrière un drapeau que presque
+     personne n'activera, et la mise en page doit marcher quand même.
+     `data-verrou` suit le verrou de placement.
+
+     Variables fournies par le script quand l'API répond :
+       --seg0       hauteur utile de la moitié haute, en-tête déduit
+       --charniere  épaisseur de la pliure, laissée vide
+
+     DEUX INVARIANTS tiennent l'alignement des deux plateaux, à ne pas
+     défaire sans refaire les mesures :
+       1. les deux bandes latérales — le bac en haut, les outils de la
+          feuille en bas — font exactement 56 px ;
+       2. les deux cadres de grille ont la même marge droite, 8 px.
+     C'est ce qui donne aux deux grilles la même boîte, donc la même taille
+     et le même alignement vertical.                                       */
+
+  :root[data-pose="pliee"]{ --colListe:clamp(190px, 31%, 300px); --bande:56px }
+  :root[data-pose="pliee"] body{ height:100svh; overflow:hidden }
+
+  /* en-tête ramené au strict minimum : la hauteur est comptée */
+  :root[data-pose="pliee"] header{ padding:8px 14px; border-bottom:1px solid var(--line) }
+  :root[data-pose="pliee"] header h1{ font-size:18px }
+  :root[data-pose="pliee"] #horizon,
+  :root[data-pose="pliee"] #deco{ display:none }
+
+  /* L'écart de rangée EST la pliure : une marge sur l'élément de grille
+     serait prise à l'intérieur de sa rangée et ne séparerait rien. */
+  :root[data-pose="pliee"] main{
+    display:grid; gap:var(--charniere, 12px) 10px; padding:10px;
+    height:calc(100svh - var(--hEnTete, 52px));
+    grid-template-columns:minmax(0,var(--colListe)) minmax(0,1fr);
+    grid-template-rows:var(--seg0, 1fr) auto minmax(0,1fr);
+  }
+
+  /* ------------------------------------------------------- moitié haute
+     Trois cadres, comme en bas : les outils, la liste des réponses à donner,
+     et la grille. Le panneau qui les contenait tous perd donc son décor et
+     ne sert plus que de grille de disposition.
+     `height:100%` et pas seulement l'étirement implicite : un élément de
+     grille dont le contenu dépasse sa rangée déborde par-dessus la pliure
+     au lieu d'être rogné. */
+  :root[data-pose="pliee"] #minePanel{
+    grid-column:1/3; grid-row:1; height:100%; min-height:0; overflow:hidden;
+    display:grid; gap:0 10px;
+    grid-template-columns:minmax(0,var(--colListe)) minmax(0,1fr);
+    background:none; border:0; padding:0; box-shadow:none;
+  }
+  :root[data-pose="pliee"] #minePanel .grpListe{
+    grid-column:1; grid-row:1; height:100%; min-height:0; min-width:0;
+    display:flex; flex-direction:column; gap:10px; overflow:auto;
+    background:none; border:0; padding:0;
+  }
+  :root[data-pose="pliee"] #minePanel .grpGrille{
+    grid-column:2; grid-row:1; height:100%; min-height:0; min-width:0;
+    display:flex; flex-direction:column; overflow:hidden;
+    background:var(--panel); background-image:var(--texture);
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:10px 8px 10px 10px;          /* INVARIANT 2 : marge droite de 8 */
+  }
+  :root[data-pose="pliee"] #minePanel .carte{
+    background:var(--panel); background-image:var(--texture);
+    border:1px solid var(--line); border-radius:var(--radius); padding:10px;
+  }
+  :root[data-theme="strates"][data-pose="pliee"] #minePanel .carte,
+  :root[data-theme="strates"][data-pose="pliee"] #minePanel .grpGrille{
+    border-color:#6b3a2b }
+  /* `display:contents` est l'état normal des cartes : elles n'existent pas
+     pour la mise en page. Il faut donc leur rendre une boîte ici, sinon le
+     fond et la bordure n'ont rien à peindre. */
+  :root[data-pose="pliee"] #carteOutils{
+    display:block; flex:0 1 auto; max-height:55%; min-height:0; overflow:auto }
+  :root[data-pose="pliee"] #carteMylog{
+    display:flex; flex-direction:column; flex:1 1 auto; min-height:120px;
+    overflow:auto }
+  :root[data-pose="pliee"] #carteMylog #mylog{ flex:1 1 auto; min-height:0 }
+  :root[data-pose="pliee"] #minePanel .grpListe > .carte > .row{ margin-top:0 }
+  :root[data-pose="pliee"] #titreMylog{ margin:0 0 8px }
+  :root[data-pose="pliee"] #minePanel details{ flex:0 0 auto }
+
+  /* La grille et le bac côte à côte, exactement comme la feuille et ses
+     outils en bas. */
+  :root[data-pose="pliee"] #mineZone{
+    flex:1 1 auto; min-height:0; display:flex; gap:6px; align-items:stretch }
+  :root[data-pose="pliee"] #tray{
+    flex:0 0 auto; width:var(--bande);    /* INVARIANT 1 : bande de 56 */
+    display:flex; flex-direction:column; flex-wrap:nowrap; gap:6px;
+    margin-top:0; min-height:0; overflow-y:auto; overflow-x:hidden }
+  :root[data-pose="pliee"] #tray .gem{
+    flex:0 0 auto; width:var(--bande); height:48px; padding:2px }
+  :root[data-pose="pliee"] #tray .gem b{ font-size:8px }
+
+  /* le compteur de réponses coiffe la bande, comme celui des tours en bas */
+  :root[data-pose="pliee"] #repBox{
+    display:flex; margin-left:auto; width:var(--bande); box-sizing:border-box;
+    padding:3px 2px; flex-direction:column; align-items:center;
+    background:var(--btn); border:1px solid var(--btn-b); border-radius:8px }
+  :root[data-pose="pliee"] #repN{
+    font-family:var(--display); font-size:17px; font-weight:600;
+    color:var(--accent); font-variant-numeric:tabular-nums; line-height:1 }
+  :root[data-pose="pliee"] #repMot{
+    font-size:9px; letter-spacing:.04em; text-transform:uppercase; color:var(--dim) }
+
+  /* ------------------------------------------------ moitié haute, verrouillée
+     Une fois le placement figé, les outils n'ont plus d'objet. Seul le verrou
+     reste, sans quoi on ne pourrait plus déverrouiller. */
+  :root[data-pose="pliee"][data-verrou="1"] #outilsPlacement,
+  :root[data-pose="pliee"][data-verrou="1"] #status{ display:none }
+  /* Le bac se vide mais garde sa place : c'est la bande de 56 px qui donne
+     aux deux plateaux la même largeur. La faire disparaître élargirait la
+     grille du haut et la décalerait de celle du bas. L'espace vide qui reste
+     est du fond de cadre, exactement comme sous les outils en bas. */
+  :root[data-pose="pliee"][data-verrou="1"] #tray .gem{ display:none }
+
+  /* ------------------------------------------------------- moitié basse */
+  :root[data-pose="pliee"] #aidePanel{
+    grid-column:1; grid-row:2; position:static; margin:0 0 8px; min-width:0 }
+  :root[data-pose="pliee"] #notesPanel{
+    grid-column:1; grid-row:3; height:100%; min-height:0; min-width:0;
+    display:flex; flex-direction:column; overflow:auto; margin:0 }
+  :root[data-pose="pliee"] #notesPanel #log{ flex:1 1 auto; min-height:0 }
+  :root[data-pose="pliee"] #sheetPanel{
+    grid-column:2; grid-row:2/span 2; height:100%; min-height:0;
+    display:flex; flex-direction:column; overflow:hidden; margin:0;
+    padding-left:10px; padding-right:8px;  /* INVARIANT 2 */
+  }
+
+  /* La feuille et ses outils côte à côte : les palettes dressées à la
+     verticale rendent à la grille la hauteur qu'elles lui prenaient. */
+  :root[data-pose="pliee"] #sheetZone{
+    flex:1 1 auto; min-height:0; display:flex; gap:6px; align-items:stretch }
+  :root[data-pose="pliee"] #outilsFeuille{
+    flex:0 0 auto; width:var(--bande);    /* INVARIANT 1 */
+    display:flex; flex-direction:column; gap:6px;
+    overflow-y:auto; min-height:0 }
+  :root[data-pose="pliee"] #outilsFeuille .row{ margin-top:0; display:block }
+  /* Dressées en une seule colonne, les dix formes dépassaient du cadre et il
+     fallait faire défiler pour atteindre la gomme. Deux colonnes étroites :
+     tout tient, et la grille garde sa hauteur. */
+  :root[data-pose="pliee"] #outilsFeuille .swatches{
+    display:grid; grid-template-columns:repeat(2, auto);
+    justify-content:start; gap:4px }
+  :root[data-pose="pliee"] #outilsFeuille span{ font-size:10px; line-height:1.2 }
+  :root[data-pose="pliee"] #sheetPanel .sw{ width:26px; height:26px }
+  /* Sans contrainte, c'est le bouton qui impose sa largeur à toute la
+     colonne — 100 px au lieu de 56 — et la grille perd d'autant. */
+  :root[data-pose="pliee"] #btnWipe{
+    width:100%; font-size:10px; line-height:1.15; padding:4px 2px;
+    white-space:normal; text-align:center }
+
+  /* le compteur de tours coiffe la colonne d'outils : même largeur, même
+     bord droit. Son nombre passe au-dessus du mot pour y tenir. */
+  :root[data-pose="pliee"] #tourBox{
+    width:var(--bande); box-sizing:border-box; padding:3px 2px; gap:0;
+    flex-direction:column; align-items:center; border-radius:8px }
+  :root[data-pose="pliee"] #tourN{ font-size:17px }
+  :root[data-pose="pliee"] #tourMot{ font-size:9px; letter-spacing:.04em }
+
+  /* ------------------------------------------------------------ communs
+     `width:auto` laissait le flex décider d'une largeur plus petite que la
+     place disponible, et le dessin se retrouvait centré dans une boîte trop
+     étroite. En occupant toute la boîte, `preserveAspectRatio` met le plateau
+     à la plus grande échelle qui tienne. */
+  :root[data-pose="pliee"] #mine,
+  :root[data-pose="pliee"] #sheet{
+    flex:1 1 auto; min-height:0; min-width:0; display:flex;
+    justify-content:center; align-items:center }
+  :root[data-pose="pliee"] #mine svg,
+  :root[data-pose="pliee"] #sheet svg{ width:100%; height:100% }
+  :root[data-pose="pliee"] #mylog,
+  :root[data-pose="pliee"] #log{ max-height:none }
+  :root[data-pose="pliee"] .panelHead{ flex-wrap:wrap }
+  :root[data-pose="pliee"] .gem{ width:66px; height:54px }
+  /* les explications longues ne servent plus à rien ici */
+  :root[data-pose="pliee"] .hint{ display:none }
+  /* pas d'animation d'entrée : on bascule souvent de pose */
+  :root[data-pose="pliee"] .panel,
+  :root[data-pose="pliee"] #aidePanel{ animation:none }
+
   main{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
        gap:16px; padding:16px; align-items:start}
   @media(max-width:1000px){ main{grid-template-columns:minmax(0,1fr)} }
@@ -342,12 +549,7 @@
     color:var(--dim)}
 
   /* ---- notes de partie ---- */
-  #noteForm{display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:12px}
-  #noteForm input, #noteForm select{font:inherit; font-size:13px; color:var(--ink);
     background:var(--input); border:1px solid var(--btn-b); border-radius:7px; padding:6px 7px}
-  #noteForm input{width:52px; text-align:center; text-transform:uppercase}
-  #noteForm input.bad{border-color:#f2827f}
-  #noteForm .to{color:var(--dim)}
   #log,#mylog{margin-top:10px; max-height:300px; overflow:auto;
     border-top:1px solid var(--line); padding-top:8px}
   #log:empty::after{content:"Aucune réponse notée.";
@@ -395,17 +597,31 @@
   </section>
 
   <!-- ================================================= PLATEAU MINE ===== -->
-  <section class="panel">
-    <h2>Mes gemmes</h2>
+  <section class="panel" id="minePanel">
+   <!-- Les deux groupes ci-dessous sont en `display:contents` tant qu'on n'est
+        pas en pose pliee : ils ne changent donc rien a la mise en page
+        habituelle. En pose pliee ils deviennent les deux colonnes de la
+        moitie haute — la liste a gauche, la grille a droite. -->
+   <div class="grpGrille">
+    <div class="panelHead" id="mineHead">
+      <h2 id="titrePlateau">Mes gemmes</h2>
+      <div id="repBox" title="Réponses déjà données à l'adversaire">
+        <b id="repN">0</b><span id="repMot">rép.</span>
+      </div>
+    </div>
     <div class="hint" style="margin-top:0">Votre mine, celle que l'adversaire doit
       deviner. Cliquez un repère du bord pour calculer la réponse à lui donner.</div>
-    <div id="mine"></div>
+    <div id="mineZone">
+      <div id="mine"></div>
+      <div id="tray"></div>
+    </div>
+   </div>
 
+   <div class="grpListe">
+    <div class="carte" id="carteOutils">
     <div class="row"><button id="btnLock" class="lockbtn"></button></div>
 
-    <div id="tray"></div>
-
-    <div class="row">
+    <div class="row" id="outilsPlacement">
       <button id="btnRot"   class="ico"></button>
       <button id="btnFlip"  class="ico"></button>
       <button id="btnDel"   class="ico"></button>
@@ -420,42 +636,47 @@
     </div>
 
     <div id="status"></div>
+    </div>
 
-    <h2 style="margin-top:16px">Réponses que je dois donner</h2>
+    <div class="carte" id="carteMylog">
+    <h2 style="margin-top:16px" id="titreMylog">Réponses que je dois donner</h2>
     <div id="mylog"></div>
 
     <details>
       <summary>Comment placer · que veulent dire les icônes</summary>
       <ul id="legende"></ul>
-      <p>Cliquez une gemme dans le bac, puis cliquez sur le plateau pour la poser.
-         Faites glisser une gemme posée pour la déplacer. <kbd>R</kbd> pivote,
-         <kbd>F</kbd> retourne, <kbd>Suppr</kbd> retire.</p>
-      <p>Les gemmes forment un tangram de 4x4 cases. Le grand triangle et le petit
-         triangle ne se posent que l'hypoténuse alignée sur la grille ; le carré
-         se pose toujours en losange. C'est la règle b du livret.</p>
-      <p>Le parallélogramme est la seule gemme dont la forme miroir ne s'obtient
-         pas par rotation : le bouton <b>Retourner</b> lui donne son second sens.
-         Il reste inactif pour les autres gemmes, qui sont symétriques.</p>
+      <div id="aidePlacement"></div>
     </details>
+    </div>
+   </div>
   </section>
 
   <!-- ============================================ FEUILLE DE SOLUTIONS ==== -->
   <section class="panel" id="sheetPanel">
-    <h2>Feuille de solutions</h2>
+    <div class="panelHead" id="sheetHead">
+      <h2>Feuille de solutions</h2>
+      <div id="tourBox" title="Nombre de questions posées à l'adversaire">
+        <b id="tourN">0</b><span id="tourMot">tour</span>
+      </div>
+    </div>
     <div class="hint" style="margin-top:0">La mine de l'adversaire, telle que vous
       la déduisez. Grille de travail : rien n'y est calculé.</div>
+    <div id="sheetZone">
     <div id="sheet"></div>
+    <div id="outilsFeuille">
+      <div class="row">
+        <span style="font-size:12.5px;color:var(--dim);width:100%">Couleur</span>
+        <div class="swatches" id="swColors"></div>
+      </div>
+      <div class="row">
+        <span style="font-size:12.5px;color:var(--dim);width:100%">Forme</span>
+        <div class="swatches" id="swBrushes"></div>
+      </div>
+      <div class="row">
+        <button id="btnWipe">Effacer la feuille</button>
+      </div>
+    </div>
 
-    <div class="row">
-      <span style="font-size:12.5px;color:var(--dim);width:100%">Couleur</span>
-      <div class="swatches" id="swColors"></div>
-    </div>
-    <div class="row">
-      <span style="font-size:12.5px;color:var(--dim);width:100%">Forme</span>
-      <div class="swatches" id="swBrushes"></div>
-    </div>
-    <div class="row">
-      <button id="btnWipe">Effacer la feuille</button>
     </div>
     <div id="pickHint" hidden></div>
 
@@ -477,34 +698,20 @@
   </section>
 
   <!-- ================================================ REPONSES NOTEES ==== -->
-  <section class="panel" style="grid-column:1/-1">
-    <div class="panelHead">
+  <section class="panel" id="notesPanel">
+    <div class="panelHead" id="notesHead">
       <h2>Réponses de l'adversaire</h2>
-      <div id="tourBox" title="Nombre de questions posées à l'adversaire">
-        <b id="tourN">0</b><span id="tourMot">tour</span>
-      </div>
+      <button id="btnClearLog" style="margin-left:auto">Tout effacer</button>
     </div>
-    <div class="hint" style="margin-top:0">Recopiez ici ce que l'adversaire vous
-      annonce dans le chat. Le plus rapide : <b>cliquez le repère d'entrée sur la
-      feuille, puis le repère de sortie</b> — une fenêtre demande la couleur.
-      La saisie au clavier ci-dessous reste disponible.<br>
-      Rien n'est vérifié ni calculé : la ligne est ajoutée
-      telle quelle. Pour une question sur une case, tapez la coordonnée à gauche
-      (<b>C6</b>) et laissez la sortie vide.<br>
+    <div class="hint" style="margin-top:0">Ce que l'adversaire vous annonce dans
+      le chat se note <b>en cliquant la feuille de solutions</b> : le repère
+      d'entrée, puis le repère de sortie — une fenêtre demande la couleur. Pour
+      une question sur une case, prenez le pinceau <b>?</b> et cliquez la case.<br>
+      Rien n'est vérifié ni calculé : la ligne est ajoutée telle quelle.<br>
       Une réponse <b>transparente / rien</b> barre automatiquement de croix ce
       qu'elle prouve vide : toute la ligne entre deux repères qui se font face
       (A et 11, 3 et K...), ou la seule case interrogée. Une réponse colorée ne
       déclenche rien.</div>
-    <form id="noteForm" autocomplete="off">
-      <input id="nIn"  placeholder="1"  maxlength="3" aria-label="point d'entrée">
-      <span class="to">&rarr;</span>
-      <input id="nOut" placeholder="11" maxlength="3" aria-label="point de sortie">
-      <select id="nCol"></select>
-      <button type="submit">Ajouter</button>
-      <span class="sep"></span>
-      <button type="button" id="btnAbs">Signal absorbé</button>
-      <button type="button" id="btnClearLog">Tout effacer</button>
-    </form>
     <div id="log"></div>
   </section>
 </main>
@@ -1012,6 +1219,41 @@ function setIcon(id, name, label){
 
 // Legende : au doigt il n'y a pas d'infobulle, les icones doivent etre
 // explicitees quelque part.
+/* L'aide au placement n'est pas la meme d'une edition a l'autre : Mine
+   explique le tangram et le parallelogramme, Space l'anneau, le trou noir et
+   la grande face contre un bord. */
+var AIDE_PLACEMENT = {
+  mine:
+    '<p>Cliquez une gemme dans le bac, puis cliquez sur le plateau pour la poser.' +
+    ' Faites glisser une gemme posée pour la déplacer. <kbd>R</kbd> pivote,' +
+    ' <kbd>F</kbd> retourne, <kbd>Suppr</kbd> retire.</p>' +
+    '<p>Les gemmes forment un tangram de 4x4 cases. Le grand triangle et le petit' +
+    ' triangle ne se posent que l\'hypoténuse alignée sur la grille ; le carré' +
+    ' se pose toujours en losange. C\'est la règle b du livret.</p>' +
+    '<p>Le parallélogramme est la seule gemme dont la forme miroir ne s\'obtient' +
+    ' pas par rotation : le bouton <b>Retourner</b> lui donne son second sens.' +
+    ' Il reste inactif pour les autres gemmes, qui sont symétriques.</p>',
+  space:
+    '<p>Cliquez une planète dans le bac, puis cliquez sur le plateau pour la poser.' +
+    ' Faites glisser une planète posée pour la déplacer. <kbd>R</kbd> pivote,' +
+    ' <kbd>Suppr</kbd> retire. Aucune planète n\'est chirale : <b>Retourner</b>' +
+    ' reste donc inactif.</p>' +
+    '<p>Deux planètes ne peuvent se toucher que par un <b>coin</b> — jamais par' +
+    ' une arête, jamais dans une même case. La grande planète blanche se pose' +
+    ' toujours <b>grande face contre un bord</b> du plateau.</p>' +
+    '<p>L\'anneau de Saturne est un mur posé sur une ligne du quadrillage : le' +
+    ' rayon qui le rencontre fait demi-tour. Il ne peut pas traverser une autre' +
+    ' planète.</p>' +
+    '<p>Le trou noir détruit le rayon qu\'il touche. Longé de côté, il le courbe' +
+    ' une fois de 90° vers lui, sans le teinter.</p>'
+};
+function renderAidePlacement(){
+  var box = document.getElementById('aidePlacement');
+  if (box) box.innerHTML = AIDE_PLACEMENT[VER] || '';
+  var t = document.getElementById('titrePlateau');
+  if (t) t.textContent = O.motPanneau;
+}
+
 function renderLegende(){
   var ul = document.getElementById('legende');
   ul.innerHTML = '';
@@ -1021,9 +1263,9 @@ function renderLegende(){
    ['retourner', chirales.length
        ? 'Retourner (' + chirales.join(', ') + ')'
        : 'Retourner — aucune pièce de cette édition n\'est chirale'],
-   ['retirer','Retirer la gemme sélectionnée'],
+   ['retirer','Retirer la ' + O.motPiece + ' sélectionnée'],
    ['vider','Vider le plateau'],
-   ['voir','Masquer / revoir mes gemmes']].forEach(function(p){
+   ['voir','Masquer / revoir mes ' + O.motPieces]].forEach(function(p){
     var li = document.createElement('li');
     li.style.cssText = 'display:flex;align-items:center;gap:8px;margin:3px 0';
     var s = icon(p[0]);
@@ -1297,6 +1539,12 @@ function logLine(s, list, redraw){
 
 // Journal de gauche : ce que je dois repondre a l'adversaire (calcule).
 function renderMyLog(){
+  // Compteur jumeau de celui des tours : en bas on compte les questions
+  // posées, en haut les réponses déjà données.
+  var n = state.shots.filter(function(s){ return s.kind !== 'sonde'; }).length;
+  var rn = document.getElementById('repN'), rm = document.getElementById('repMot');
+  if (rn) rn.textContent = n;
+  if (rm) rm.textContent = n > 1 ? 'rép.' : 'rép.';
   var box = document.getElementById('mylog');
   box.innerHTML = '';
   state.shots.forEach(function(s){
@@ -1426,12 +1674,6 @@ function pushNote(a, b, couleur, absorbed){
   noteNeuve = null;
 }
 
-function addNote(absorbed){
-  var iIn = document.getElementById('nIn'), iOut = document.getElementById('nOut');
-  pushNote(iIn.value.trim().toUpperCase(), iOut.value.trim().toUpperCase(),
-           document.getElementById('nCol').value, absorbed);
-  iIn.value = ''; iOut.value = ''; iIn.focus();
-}
 
 /* --------------------------------------------------- aide de jeu : couleurs
    MINE reprend le paravent du jeu : chaque couleur y est representee par la
@@ -1516,8 +1758,9 @@ function renderCombos(){
   });
 }
 
+// La seule saisie de couleur restante est celle de la fenêtre ouverte au clic
+// sur la feuille ; la saisie au clavier a été retirée.
 function fillColorSelect(){
-  fillColors(document.getElementById('nCol'));
   fillColors(document.getElementById('ppCol'));
   syncPickSwatch();
 }
@@ -1568,6 +1811,9 @@ function mesureBac(){
 
 /* ------------------------------------------------------ verrou de placement */
 function renderLock(){
+  // En pose pliée, le CSS se sert de cet attribut pour escamoter les outils
+  // de placement : une fois le placement figé, ils n'ont plus d'objet.
+  document.documentElement.setAttribute('data-verrou', state.locked ? '1' : '0');
   var b = document.getElementById('btnLock');
   b.innerHTML = '';
   var svg = el('svg',{ viewBox:'-.5 -.5 1 1' });
@@ -1772,12 +2018,15 @@ function BRUSHES(){
 
 function renderPalette(){
   var cs = document.getElementById('swColors'); cs.innerHTML = '';
-  ['R','Y','B','W','D','K'].forEach(function(k){
+  // Uniquement les couleurs que porte vraiment une piece de l'edition :
+  // Space n'a pas de diamant, et son noir est un trou noir.
+  if (O.COULEURS.indexOf(state.brushColor) < 0) state.brushColor = O.COULEURS[0];
+  O.COULEURS.forEach(function(k){
     var b = document.createElement('div');
     b.className = 'sw' + (state.brushColor===k?' sel':'');
     b.style.background = O.GEM_COLORS[k].fill;
-    b.title = O.GEM_COLORS[k].nom;
-    actionnable(b, O.GEM_COLORS[k].nom, function(){
+    b.title = O.nomCouleur(k);
+    actionnable(b, O.nomCouleur(k), function(){
       state.brushColor = k; renderPalette();
     });
     b.setAttribute('aria-pressed', state.brushColor === k ? 'true' : 'false');
@@ -2058,6 +2307,99 @@ function drawDeco(){
   });
 }
 
+/* ======================================================== pose de l'appareil
+   Un telephone pliable tenu comme un ordinateur portable — charniere
+   horizontale, deux segments empiles — est la meilleure pose pour Orapa :
+   ma mine en haut, la feuille de l'adversaire en bas, rien qui traverse la
+   pliure.
+
+   Deux chemins vers la meme mise en page :
+
+   1. Le navigateur sait. `vertical-viewport-segments: 2` dit qu'il y a deux
+      segments l'un au-dessus de l'autre ; `window.viewport.segments` donne
+      leurs rectangles exacts, dont on tire l'epaisseur de la charniere.
+      Chrome et Edge le font depuis la version 138.
+
+   2. Le navigateur ne sait pas. Sur iPhone Duo, Safari 27.1 range ces deux
+      API derriere un drapeau desactive par defaut : presque personne ne
+      l'activera. On se rabat donc sur la taille — un ecran spacieux tenu en
+      portrait. L'ecran interieur du Duo mesure 669 x 867 points, un telephone
+      ordinaire bien moins : le seuil separe proprement les deux cas.         */
+
+var MQ_EMPILE = (function(){
+  try {
+    var deux = window.matchMedia('(vertical-viewport-segments: 2)');
+    var un   = window.matchMedia('(vertical-viewport-segments: 1)');
+    /* Deux verifications, parce qu'une seule ne suffit pas. Un navigateur
+       qui ignore la caracteristique doit ramener `media` a « not all », mais
+       tous ne le font pas : certains renvoient la requete telle quelle, avec
+       `matches` a faux. On se fierait alors a une reponse qui veut seulement
+       dire « je n'ai pas compris », et le repli sur la taille ne servirait
+       jamais. Donc : si la caracteristique est vraiment reconnue, l'ecran a
+       forcement un segment ou deux, et l'une des deux requetes correspond. */
+    if (!deux || deux.media === 'not all') return null;
+    if (!un.matches && !deux.matches) return null;
+    return deux;
+  } catch(e){ return null; }
+})();
+
+function poseEmpilee(){
+  if (MQ_EMPILE) return MQ_EMPILE.matches;
+  // Repli : ecran spacieux tenu en portrait. L'ecran interieur de l'iPhone
+  // Duo fait 669 x 867 points ; un telephone ordinaire reste sous le seuil.
+  var w = window.innerWidth || 0, h = window.innerHeight || 0;
+  return h > w && w >= 600 && h >= 700;
+}
+
+/* Hauteur utile de la moitie haute et epaisseur de la charniere, mesurees
+   quand l'API repond. Sans elle, le CSS partage l'espace en deux a parts
+   egales — ce qui tombe juste, la pliure etant au milieu.                  */
+function mesurePliure(){
+  var r = document.documentElement.style;
+  var segs = null;
+  try { segs = window.viewport && window.viewport.segments; } catch(e){}
+  var entete = document.querySelector('header');
+  r.setProperty('--hEnTete', (entete ? entete.getBoundingClientRect().height : 52) + 'px');
+  if (!segs || segs.length < 2){
+    r.removeProperty('--seg0'); r.removeProperty('--charniere');
+    return;
+  }
+  var haut = segs[0], bas = segs[1];
+  if (bas.top < haut.top){ var t = haut; haut = bas; bas = t; }
+  var m = document.querySelector('main');
+  var hautMain = m ? m.getBoundingClientRect().top : 0;
+  // la moitie haute commence sous l'en-tete : on retranche ce qu'elle a deja perdu
+  var utile = Math.max(0, haut.bottom - hautMain - 10);
+  r.setProperty('--seg0', utile + 'px');
+  r.setProperty('--charniere', Math.max(0, bas.top - haut.bottom) + 'px');
+}
+
+var poseCourante = null;
+function majPose(){
+  var plie = poseEmpilee();
+  var nom = plie ? 'pliee' : 'large';
+  if (nom !== poseCourante){
+    poseCourante = nom;
+    document.documentElement.setAttribute('data-pose', nom);
+    renderTours();
+  }
+  if (plie) mesurePliure();
+  else {
+    document.documentElement.style.removeProperty('--seg0');
+    document.documentElement.style.removeProperty('--charniere');
+  }
+}
+
+(function ecoutePose(){
+  if (MQ_EMPILE && MQ_EMPILE.addEventListener) MQ_EMPILE.addEventListener('change', majPose);
+  try {
+    if (navigator.devicePosture && navigator.devicePosture.addEventListener)
+      navigator.devicePosture.addEventListener('change', majPose);
+  } catch(e){}
+  window.addEventListener('resize', majPose);
+  window.addEventListener('orientationchange', majPose);
+})();
+
 /* ---------------------------------------------------------- bascule de theme
    Le theme est aussi dans l'URL (?theme=mine) : on peut donc ouvrir les deux
    maquettes dans deux fenetres et les comparer cote a cote.                 */
@@ -2065,9 +2407,19 @@ function applyTheme(name){
   if (!THEMES[name]) name = 'strates';
   T = THEMES[name];
 
+  /* L'attribut d'abord. Tout l'habillage en depend : si quoi que ce soit
+     echouait plus bas, la page resterait au moins lisible. */
+  document.documentElement.setAttribute('data-theme', name);
+
   /* Changement d'EDITION : on rebranche le moteur sur l'autre plateau et on
      reprend la partie la ou elle en etait dans cette edition. Les deux etats
-     ne se touchent jamais.                                                 */
+     ne se touchent jamais.
+
+     Attention : on ne declenche AUCUN rendu ici. Au tout premier appel, les
+     plateaux ne sont pas encore construits ; un `renderSheet()` premature
+     tomberait sur `sheet.layers` encore indefini et tuerait le script avant
+     meme que la page soit habillee. On se contente de remettre l'etat a
+     plat, et le rendu complet qui suit s'occupe de l'affichage.           */
   var ver = EDITION_DE[name];
   if (ver !== VER){
     VER = ver;
@@ -2075,14 +2427,13 @@ function applyTheme(name){
     COLS = O.COLS; ROWS = O.ROWS;
     state = GAMES[ver];
     ghost = { x:0, y:0, rot:0, flip:0 };
-    cancelPick();
+    state.pick = null;
+    document.getElementById('pickPop').hidden = true;
     // Mine n'a pas d'anneau : le pinceau disparait, il ne faut pas rester
     // dessus en revenant.
     if (state.brushShape === 'mur' && !editionAMurs()) state.brushShape = 'full';
   }
   mesureBac();
-
-  document.documentElement.setAttribute('data-theme', name);
   [].forEach.call(document.querySelectorAll('[data-theme-btn]'), function(b){
     b.classList.toggle('on', b.getAttribute('data-theme-btn') === name);
   });
@@ -2098,8 +2449,8 @@ function applyTheme(name){
   sheet = buildBoard(document.getElementById('sheet'), 'sheet');
   bindBoards();
   drawHorizon(); drawDeco();
-  renderLegende(); renderCombos(); fillColorSelect();
-  renderPalette(); renderTray(); renderAll(); renderNotes();
+  renderLegende(); renderAidePlacement(); renderCombos(); renderAide(); fillColorSelect();
+  renderPalette(); renderTray(); renderAll(); renderNotes(); renderPick();
   renderMyLog(); renderToggles(); renderLock(); renderTours();
   setIcon('btnFlip', 'retourner', flipTitre());
 }
@@ -2170,16 +2521,25 @@ document.getElementById('ppCol').onchange   = syncPickSwatch;
 document.getElementById('pickPop').onclick  = function(e){
   if (e.target === this) cancelPick();      // clic sur le fond = annuler
 };
-document.getElementById('noteForm').onsubmit = function(e){ e.preventDefault(); addNote(false); };
-document.getElementById('btnAbs').onclick = function(){ addNote(true); };
 document.getElementById('btnClearLog').onclick = function(){
   state.notes = []; renderSheet(); renderNotes();
 };
-document.getElementById('btnAide').onclick = function(){
+/* L'aide des couleurs est repliée au chargement : elle est longue, et on n'en
+   a besoin qu'au moment de lire une réponse. Son état est gardé dans une
+   variable plutôt que lu dans le style : sinon chaque reconstruction de la
+   page — changement d'édition, changement de pose — la rouvrirait. */
+var aideOuverte = false;
+function renderAide(){
   var c = document.getElementById('combos');
-  var hidden = c.style.display === 'none';
-  c.style.display = hidden ? '' : 'none';
-  this.textContent = hidden ? 'Masquer' : 'Afficher';
+  var b = document.getElementById('btnAide');
+  if (!c || !b) return;
+  c.style.display = aideOuverte ? '' : 'none';
+  b.textContent = aideOuverte ? 'Masquer' : 'Afficher';
+  b.setAttribute('aria-expanded', aideOuverte ? 'true' : 'false');
+}
+document.getElementById('btnAide').onclick = function(){
+  aideOuverte = !aideOuverte;
+  renderAide();
 };
 window.addEventListener('keydown', function(e){
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
@@ -2203,7 +2563,7 @@ setIcon('btnFlip',  'retourner', flipTitre());
 setIcon('btnDel',   'retirer',   'Retirer la gemme sélectionnée (Suppr)');
 setIcon('btnClear', 'vider',     'Vider le plateau');
 renderLegende();
-renderCombos(); fillColorSelect(); renderToggles(); renderLock();
+renderCombos(); renderAide(); fillColorSelect(); renderToggles(); renderLock();
 renderMyLog();
 
 [].forEach.call(document.querySelectorAll('[data-theme-btn]'), function(b){
@@ -2214,6 +2574,7 @@ renderMyLog();
 var wanted = 'strates';
 try { wanted = new URL(location.href).searchParams.get('theme') || 'strates'; } catch(e){}
 applyTheme(wanted);
+majPose();
 })();
 </script>
 </body>
